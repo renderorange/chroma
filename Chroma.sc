@@ -77,6 +77,10 @@ Chroma {
     loadSynthDefs {
         this.loadInputSynthDef;
         this.loadAnalysisSynthDef;
+        this.loadSubSynthDef;
+        this.loadPadSynthDef;
+        this.loadShimmerSynthDef;
+        this.loadNoiseSynthDef;
     }
 
     loadInputSynthDef {
@@ -130,6 +134,55 @@ Chroma {
             Out.kr(centroidBus, centroid);
             Out.kr(spreadBus, spread);
             Out.kr(flatnessBus, flatness);
+        }).add;
+    }
+
+    loadSubSynthDef {
+        SynthDef(\chroma_sub, { |out=0, freq=65.41, amp=0.3, gate=1|
+            var sig, env;
+            env = EnvGen.kr(Env.asr(2, 1, 2), gate, doneAction: 2);
+            sig = SinOsc.ar([freq, freq * 0.5], 0, 0.5).sum;
+            sig = sig + SinOsc.ar(freq * 2, 0, 0.2);
+            sig = LPF.ar(sig, 200);
+            Out.ar(out, sig * amp * env ! 2);
+        }).add;
+    }
+
+    loadPadSynthDef {
+        SynthDef(\chroma_pad, { |out=0, freq=65.41, amp=0.3, detune=0.01, cutoff=2000, gate=1|
+            var sig, env, freqs;
+            env = EnvGen.kr(Env.asr(3, 1, 3), gate, doneAction: 2);
+            freqs = freq * [1, 1 + detune, 1 - detune, 2, 2 * (1 + detune)];
+            sig = Saw.ar(freqs).sum * 0.2;
+            sig = RLPF.ar(sig, cutoff, 0.5);
+            Out.ar(out, sig * amp * env ! 2);
+        }).add;
+    }
+
+    loadShimmerSynthDef {
+        SynthDef(\chroma_shimmer, { |out=0, freq=65.41, amp=0.2, gate=1|
+            var sig, env, freqs, amps;
+            env = EnvGen.kr(Env.asr(4, 1, 4), gate, doneAction: 2);
+            // High harmonics with slow LFO modulation
+            freqs = freq * [4, 5, 6, 8, 10, 12];
+            amps = [0.3, 0.25, 0.2, 0.15, 0.1, 0.05];
+            sig = SinOsc.ar(
+                freqs * LFNoise1.kr(0.1 ! 6).range(0.99, 1.01),
+                0,
+                amps * LFNoise1.kr(0.2 ! 6).range(0.5, 1)
+            ).sum;
+            sig = HPF.ar(sig, 2000);
+            Out.ar(out, sig * amp * env ! 2);
+        }).add;
+    }
+
+    loadNoiseSynthDef {
+        SynthDef(\chroma_noise, { |out=0, amp=0.1, cutoff=4000, gate=1|
+            var sig, env;
+            env = EnvGen.kr(Env.asr(2, 1, 2), gate, doneAction: 2);
+            sig = PinkNoise.ar;
+            sig = BPF.ar(sig, cutoff, 0.5);
+            Out.ar(out, sig * amp * env ! 2);
         }).add;
     }
 
