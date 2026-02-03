@@ -49,6 +49,9 @@ Chroma.stop;   // Stop and cleanup
 ### Terminal UI
 
 ```bash
+# Install deps
+sudo apt update && apt install libasound2-dev
+
 # Build the TUI (requires Go)
 cd chroma-tui && go build
 
