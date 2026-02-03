@@ -9,6 +9,12 @@ Chroma {
     var <window;
     var <blendMode;
     var <dryWet;
+    var <grainBuffer;
+    var <freezeBuffer;
+    var <frozen;
+    var <filterParams;
+    var <granularParams;
+    var <reverbDelayParams;
 
     *new { |server|
         ^super.new.init(server);
@@ -27,6 +33,28 @@ Chroma {
         synths = ();
         blendMode = \mirror;
         dryWet = 0.5;
+        frozen = false;
+        filterParams = (
+            amount: 0.5,
+            cutoff: 2000,
+            resonance: 0.3
+        );
+        granularParams = (
+            density: 10,
+            size: 0.1,
+            pitchScatter: 0.1,
+            posScatter: 0.2,
+            mix: 0.3
+        );
+        reverbDelayParams = (
+            blend: 0.5,
+            decayTime: 3,
+            shimmerPitch: 12,
+            delayTime: 0.3,
+            modRate: 0.5,
+            modDepth: 0.3,
+            mix: 0.3
+        );
         ^this;
     }
 
@@ -76,6 +104,21 @@ Chroma {
 
         // Audio bus for analyzed signal
         buses[\inputAudio] = Bus.audio(server, 1);
+
+        // Effect audio buses
+        buses[\filteredAudio] = Bus.audio(server, 1);
+        buses[\granularAudio] = Bus.audio(server, 1);
+        buses[\reverbAudio] = Bus.audio(server, 1);
+        buses[\delayAudio] = Bus.audio(server, 1);
+
+        // Effect control buses
+        buses[\filterGains] = Bus.control(server, 8);
+        buses[\granularCtrl] = Bus.control(server, 4);  // density, size, pitchScatter, posScatter
+        buses[\reverbDelayCtrl] = Bus.control(server, 4);  // blend, decay, modRate, modDepth
+
+        // Grain buffers (2 seconds at server sample rate)
+        grainBuffer = Buffer.alloc(server, server.sampleRate * 2, 1);
+        freezeBuffer = Buffer.alloc(server, server.sampleRate * 2, 1);
     }
 
     loadSynthDefs {
@@ -384,6 +427,8 @@ Chroma {
         synths.do(_.free);
         buses.do(_.free);
         fftBuffer.free;
+        grainBuffer.free;
+        freezeBuffer.free;
         if(window.notNil) { window.close };
         "Chroma stopped".postln;
     }
@@ -409,6 +454,17 @@ Chroma {
     setInputGain { |gain|
         if(synths[\input].notNil) {
             synths[\input].set(\gain, gain);
+        };
+    }
+
+    toggleFreeze {
+        frozen = frozen.not;
+        if(frozen) {
+            // Copy current grain buffer to freeze buffer
+            grainBuffer.copyData(freezeBuffer);
+        };
+        if(synths[\granular].notNil) {
+            synths[\granular].set(\freeze, frozen.asInteger);
         };
     }
 }
