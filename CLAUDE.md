@@ -21,6 +21,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | `docs/plans/2026-02-03-chroma-effects-implementation.md` | Effects implementation plan |
 | `docs/plans/2026-02-03-audio-device-selection-design.md` | Audio device selection design |
 | `docs/plans/2026-02-03-input-freeze-design.md` | Input freeze design |
+| `docs/plans/2026-02-03-tui-design.md` | TUI and MIDI control design |
 
 ## Current Status
 
