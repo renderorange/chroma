@@ -40,7 +40,7 @@ test_headless() {
 
     output=$(timeout 30 sclang test_synths.scd 2>&1) || true
 
-    if echo "$output" | grep -q "ALL SYNTH TESTS PASSED"; then
+    if echo "$output" | grep -q "ALL EFFECT TESTS PASSED"; then
         pass "Headless synth test"
         return 0
     else
