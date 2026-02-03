@@ -7,6 +7,8 @@ Chroma {
     var <buses;
     var <synths;
     var <window;
+    var <blendMode;
+    var <layerAmps;
 
     *new { |server|
         ^super.new.init(server);
@@ -23,6 +25,8 @@ Chroma {
         );
         buses = ();
         synths = ();
+        blendMode = \mirror;
+        layerAmps = [0.3, 0.3, 0.2, 0.1];  // sub, pad, shimmer, noise defaults
         ^this;
     }
 
@@ -72,11 +76,21 @@ Chroma {
 
         // Audio bus for analyzed signal
         buses[\inputAudio] = Bus.audio(server, 1);
+
+        // Layer control buses
+        buses[\subAmp] = Bus.control(server, 1);
+        buses[\padAmp] = Bus.control(server, 1);
+        buses[\shimmerAmp] = Bus.control(server, 1);
+        buses[\noiseAmp] = Bus.control(server, 1);
+        buses[\padCutoff] = Bus.control(server, 1);
+        buses[\padDetune] = Bus.control(server, 1);
+        buses[\rootFreq] = Bus.control(server, 1);
     }
 
     loadSynthDefs {
         this.loadInputSynthDef;
         this.loadAnalysisSynthDef;
+        this.loadBlendControlSynthDef;
         this.loadSubSynthDef;
         this.loadPadSynthDef;
         this.loadShimmerSynthDef;
@@ -137,6 +151,78 @@ Chroma {
         }).add;
     }
 
+    loadBlendControlSynthDef {
+        SynthDef(\chroma_blend, { |mode=0, bandsBus, centroidBus, spreadBus, flatnessBus,
+            subAmpBus, padAmpBus, shimmerAmpBus, noiseAmpBus,
+            padCutoffBus, padDetuneBus, rootFreqBus,
+            baseSubAmp=0.3, basePadAmp=0.3, baseShimmerAmp=0.2, baseNoiseAmp=0.1,
+            baseFreq=65.41|
+
+            var bands, centroid, spread, flatness;
+            var subAmp, padAmp, shimmerAmp, noiseAmp;
+            var padCutoff, padDetune, rootFreq;
+
+            bands = In.kr(bandsBus, 8);
+            centroid = In.kr(centroidBus);
+            spread = In.kr(spreadBus);
+            flatness = In.kr(flatnessBus);
+
+            // Mode 0: Mirror - direct mapping
+            // Mode 1: Complement - inverted mapping
+            // Mode 2: Transform - feature-based mapping
+
+            subAmp = Select.kr(mode, [
+                bands[0..1].sum * baseSubAmp,           // Mirror: low bands
+                (1 - bands[0..1].sum) * baseSubAmp,    // Complement: inverted
+                (1 - flatness) * baseSubAmp             // Transform: tonality -> sub
+            ]);
+
+            padAmp = Select.kr(mode, [
+                bands[2..4].sum * basePadAmp,           // Mirror: mid bands
+                (1 - bands[2..4].sum) * basePadAmp,    // Complement
+                centroid.linlin(0, 1, 0.5, 1) * basePadAmp  // Transform
+            ]);
+
+            shimmerAmp = Select.kr(mode, [
+                bands[5..7].sum * baseShimmerAmp,       // Mirror: high bands
+                (1 - bands[5..7].sum) * baseShimmerAmp, // Complement
+                centroid * baseShimmerAmp               // Transform: brightness -> shimmer
+            ]);
+
+            noiseAmp = Select.kr(mode, [
+                flatness * baseNoiseAmp,                // Mirror: flatness -> noise
+                (1 - flatness) * baseNoiseAmp,         // Complement
+                flatness * baseNoiseAmp * 2             // Transform: more noise
+            ]);
+
+            padCutoff = Select.kr(mode, [
+                centroid.linexp(0, 1, 500, 8000),       // Mirror: follows centroid
+                centroid.linexp(0, 1, 8000, 500),       // Complement: inverted
+                spread.linexp(0, 1, 1000, 6000)         // Transform: spread controls
+            ]);
+
+            padDetune = Select.kr(mode, [
+                spread.linlin(0, 1, 0.001, 0.02),       // Mirror: spread -> detune
+                0.008,                                   // Complement: fixed
+                centroid.linlin(0, 1, 0.005, 0.015)     // Transform: centroid -> detune
+            ]);
+
+            rootFreq = Select.kr(mode, [
+                baseFreq,                               // Mirror: fixed
+                baseFreq,                               // Complement: fixed
+                baseFreq * centroid.linexp(0, 1, 0.5, 2) // Transform: +-1 octave
+            ]);
+
+            Out.kr(subAmpBus, subAmp.lag(0.1));
+            Out.kr(padAmpBus, padAmp.lag(0.1));
+            Out.kr(shimmerAmpBus, shimmerAmp.lag(0.1));
+            Out.kr(noiseAmpBus, noiseAmp.lag(0.1));
+            Out.kr(padCutoffBus, padCutoff.lag(0.1));
+            Out.kr(padDetuneBus, padDetune.lag(0.1));
+            Out.kr(rootFreqBus, rootFreq.lag(0.2));
+        }).add;
+    }
+
     loadSubSynthDef {
         SynthDef(\chroma_sub, { |out=0, freq=65.41, amp=0.3, gate=1|
             var sig, env;
@@ -187,6 +273,9 @@ Chroma {
     }
 
     createSynths {
+        var rootFreq = config[\rootNote].midicps;
+
+        // Input stage
         synths[\input] = Synth(\chroma_input, [
             \inChannel, config[\inputChannel],
             \gain, 1,
@@ -194,6 +283,7 @@ Chroma {
             \ampBus, buses[\inputAmp]
         ]);
 
+        // Analysis
         synths[\analysis] = Synth(\chroma_analysis, [
             \inBus, buses[\inputAudio],
             \fftBuf, fftBuffer,
@@ -204,6 +294,59 @@ Chroma {
             \spreadBus, buses[\spread],
             \flatnessBus, buses[\flatness]
         ], synths[\input], \addAfter);
+
+        // Blend control
+        synths[\blend] = Synth(\chroma_blend, [
+            \mode, this.blendModeIndex,
+            \bandsBus, buses[\bands],
+            \centroidBus, buses[\centroid],
+            \spreadBus, buses[\spread],
+            \flatnessBus, buses[\flatness],
+            \subAmpBus, buses[\subAmp],
+            \padAmpBus, buses[\padAmp],
+            \shimmerAmpBus, buses[\shimmerAmp],
+            \noiseAmpBus, buses[\noiseAmp],
+            \padCutoffBus, buses[\padCutoff],
+            \padDetuneBus, buses[\padDetune],
+            \rootFreqBus, buses[\rootFreq],
+            \baseSubAmp, layerAmps[0],
+            \basePadAmp, layerAmps[1],
+            \baseShimmerAmp, layerAmps[2],
+            \baseNoiseAmp, layerAmps[3],
+            \baseFreq, rootFreq
+        ], synths[\analysis], \addAfter);
+
+        // Drone layers - map to control buses
+        synths[\sub] = Synth(\chroma_sub, [
+            \freq, rootFreq,
+            \amp, layerAmps[0]
+        ], synths[\blend], \addAfter);
+        synths[\sub].map(\amp, buses[\subAmp]);
+        synths[\sub].map(\freq, buses[\rootFreq]);
+
+        synths[\pad] = Synth(\chroma_pad, [
+            \freq, rootFreq,
+            \amp, layerAmps[1],
+            \cutoff, 2000,
+            \detune, 0.01
+        ], synths[\sub], \addAfter);
+        synths[\pad].map(\amp, buses[\padAmp]);
+        synths[\pad].map(\freq, buses[\rootFreq]);
+        synths[\pad].map(\cutoff, buses[\padCutoff]);
+        synths[\pad].map(\detune, buses[\padDetune]);
+
+        synths[\shimmer] = Synth(\chroma_shimmer, [
+            \freq, rootFreq,
+            \amp, layerAmps[2]
+        ], synths[\pad], \addAfter);
+        synths[\shimmer].map(\amp, buses[\shimmerAmp]);
+        synths[\shimmer].map(\freq, buses[\rootFreq]);
+
+        synths[\noise] = Synth(\chroma_noise, [
+            \amp, layerAmps[3],
+            \cutoff, 4000
+        ], synths[\shimmer], \addAfter);
+        synths[\noise].map(\amp, buses[\noiseAmp]);
     }
 
     buildGUI {
@@ -216,5 +359,36 @@ Chroma {
         fftBuffer.free;
         if(window.notNil) { window.close };
         "Chroma stopped".postln;
+    }
+
+    blendModeIndex {
+        ^[\mirror, \complement, \transform].indexOf(blendMode) ?? 0;
+    }
+
+    setBlendMode { |mode|
+        blendMode = mode;
+        if(synths[\blend].notNil) {
+            synths[\blend].set(\mode, this.blendModeIndex);
+        };
+    }
+
+    setLayerAmp { |layer, amp|
+        var index = [\sub, \pad, \shimmer, \noise].indexOf(layer);
+        if(index.notNil) {
+            layerAmps[index] = amp;
+            if(synths[\blend].notNil) {
+                synths[\blend].set(
+                    [\baseSubAmp, \basePadAmp, \baseShimmerAmp, \baseNoiseAmp][index],
+                    amp
+                );
+            };
+        };
+    }
+
+    setRootNote { |midiNote|
+        config[\rootNote] = midiNote;
+        if(synths[\blend].notNil) {
+            synths[\blend].set(\baseFreq, midiNote.midicps);
+        };
     }
 }
