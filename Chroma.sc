@@ -9,6 +9,8 @@ Chroma {
     var <window;
     var <blendMode;
     var <layerAmps;
+    var <droneLevel;
+    var <dryWet;
 
     *new { |server|
         ^super.new.init(server);
@@ -27,6 +29,8 @@ Chroma {
         synths = ();
         blendMode = \mirror;
         layerAmps = [0.3, 0.3, 0.2, 0.1];  // sub, pad, shimmer, noise defaults
+        droneLevel = 0.8;
+        dryWet = 0.5;
         ^this;
     }
 
@@ -95,6 +99,7 @@ Chroma {
         this.loadPadSynthDef;
         this.loadShimmerSynthDef;
         this.loadNoiseSynthDef;
+        this.loadOutputSynthDef;
     }
 
     loadInputSynthDef {
@@ -272,6 +277,16 @@ Chroma {
         }).add;
     }
 
+    loadOutputSynthDef {
+        SynthDef(\chroma_output, { |inBus, droneLevel=0.8, dryWet=0.5, outBus=0|
+            var dry, wet, sig;
+            dry = In.ar(inBus);
+            wet = In.ar(0, 2);  // Drone layers output to main bus
+            sig = (dry ! 2 * (1 - dryWet)) + (wet * dryWet * droneLevel);
+            ReplaceOut.ar(outBus, sig);
+        }).add;
+    }
+
     createSynths {
         var rootFreq = config[\rootNote].midicps;
 
@@ -347,6 +362,13 @@ Chroma {
             \cutoff, 4000
         ], synths[\shimmer], \addAfter);
         synths[\noise].map(\amp, buses[\noiseAmp]);
+
+        // Output mixer (at tail)
+        synths[\output] = Synth(\chroma_output, [
+            \inBus, buses[\inputAudio],
+            \droneLevel, droneLevel,
+            \dryWet, dryWet
+        ], nil, \addToTail);
     }
 
     buildGUI {
@@ -389,6 +411,26 @@ Chroma {
         config[\rootNote] = midiNote;
         if(synths[\blend].notNil) {
             synths[\blend].set(\baseFreq, midiNote.midicps);
+        };
+    }
+
+    setDroneLevel { |level|
+        droneLevel = level.clip(0, 1);
+        if(synths[\output].notNil) {
+            synths[\output].set(\droneLevel, droneLevel);
+        };
+    }
+
+    setDryWet { |mix|
+        dryWet = mix.clip(0, 1);
+        if(synths[\output].notNil) {
+            synths[\output].set(\dryWet, dryWet);
+        };
+    }
+
+    setInputGain { |gain|
+        if(synths[\input].notNil) {
+            synths[\input].set(\gain, gain);
         };
     }
 }
