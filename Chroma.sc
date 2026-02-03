@@ -450,12 +450,32 @@ Chroma {
     }
 
     loadOutputSynthDef {
-        SynthDef(\chroma_output, { |inBus, droneLevel=0.8, dryWet=0.5, outBus=0|
-            var dry, wet, sig;
+        SynthDef(\chroma_output, { |inBus, granularBus, reverbBus, delayBus,
+            reverbDelayBlend=0.5, dryWet=0.5, outBus=0|
+
+            var dry, granular, reverb, delay, reverbDelay, wet, sig;
+
             dry = In.ar(inBus);
-            wet = In.ar(0, 2);  // Drone layers output to main bus
-            sig = (dry ! 2 * (1 - dryWet)) + (wet * dryWet * droneLevel);
-            ReplaceOut.ar(outBus, sig);
+            granular = In.ar(granularBus);
+            reverb = In.ar(reverbBus);
+            delay = In.ar(delayBus);
+
+            // Crossfade between reverb and delay
+            reverbDelay = XFade2.ar(reverb, delay, reverbDelayBlend * 2 - 1);
+
+            // Mix granular and reverb/delay (equal blend for now)
+            wet = (granular + reverbDelay) * 0.5;
+
+            // Final dry/wet mix
+            sig = XFade2.ar(dry, wet, dryWet * 2 - 1);
+
+            // Stereo output with slight widening
+            sig = [sig, DelayN.ar(sig, 0.001, 0.0003)];
+
+            // Soft limiting
+            sig = sig.tanh;
+
+            Out.ar(outBus, sig);
         }).add;
     }
 
