@@ -73,6 +73,6 @@ Audio Input -> FFT Analysis -> Feature Extraction -> Control Buses
                                                     Output Mixer
 ```
 
-## License
+## License and Copyright
 
-MIT
+`Chroma` is Copyright (c) 2026 Blaine Motsinger under the MIT license.
