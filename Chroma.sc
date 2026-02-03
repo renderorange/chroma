@@ -184,9 +184,102 @@ Chroma {
     }
 
     loadBlendControlSynthDef {
-        // Placeholder - will be rewritten for effects
-        SynthDef(\chroma_blend, { |mode=0|
-            // Empty for now
+        SynthDef(\chroma_blend, { |mode=0, bandsBus, centroidBus, spreadBus, flatnessBus,
+            filterGainsBus, granularCtrlBus, reverbDelayCtrlBus,
+            baseFilterAmount=0.5, baseGrainDensity=10, baseGrainSize=0.1,
+            basePitchScatter=0.1, basePosScatter=0.2,
+            baseReverbDelayBlend=0.5, baseDecayTime=3, baseModRate=0.5, baseModDepth=0.3|
+
+            var bands, centroid, spread, flatness;
+            var filterGains, grainDensity, grainSize, pitchScatter, posScatter;
+            var reverbDelayBlend, decayTime, modRate, modDepth;
+
+            bands = In.kr(bandsBus, 8);
+            centroid = In.kr(centroidBus);
+            spread = In.kr(spreadBus);
+            flatness = In.kr(flatnessBus);
+
+            // Filter gains based on mode
+            filterGains = Select.kr(mode, [
+                // Mirror: boost bands with energy
+                bands.linlin(0, 1, 0.5, 1.5),
+                // Complement: cut bands with energy
+                bands.linlin(0, 1, 1.5, 0.5),
+                // Transform: centroid shifts all gains
+                bands * centroid.linlin(0, 1, 0.7, 1.3)
+            ]);
+
+            // Granular parameters
+            grainDensity = Select.kr(mode, [
+                // Mirror: more energy = denser
+                bands.sum.linlin(0, 4, baseGrainDensity * 0.5, baseGrainDensity * 2),
+                // Complement: more energy = sparser
+                bands.sum.linlin(0, 4, baseGrainDensity * 2, baseGrainDensity * 0.5),
+                // Transform: flatness controls density
+                flatness.linlin(0, 1, baseGrainDensity * 0.3, baseGrainDensity * 3)
+            ]);
+
+            grainSize = Select.kr(mode, [
+                // Mirror: more energy = smaller grains
+                bands.sum.linlin(0, 4, baseGrainSize * 2, baseGrainSize * 0.5),
+                // Complement: more energy = larger grains
+                bands.sum.linlin(0, 4, baseGrainSize * 0.5, baseGrainSize * 2),
+                // Transform: spread controls size
+                spread.linlin(0, 1, baseGrainSize * 0.5, baseGrainSize * 2)
+            ]);
+
+            pitchScatter = Select.kr(mode, [
+                // Mirror: brightness = more pitch scatter
+                centroid * basePitchScatter * 2,
+                // Complement: darkness = more scatter
+                (1 - centroid) * basePitchScatter * 2,
+                // Transform: centroid directly
+                centroid.linlin(0, 1, 0, basePitchScatter * 2)
+            ]);
+
+            posScatter = Select.kr(mode, [
+                // Mirror: spread = position scatter
+                spread * basePosScatter * 2,
+                // Complement: inverse
+                (1 - spread) * basePosScatter * 2,
+                // Transform: spread directly
+                spread.linlin(0, 1, 0.05, basePosScatter * 2)
+            ]);
+
+            // Reverb/Delay parameters
+            reverbDelayBlend = Select.kr(mode, [
+                // Mirror: bright = more shimmer (reverb)
+                centroid.linlin(0, 1, 0.7, 0.0),
+                // Complement: bright = more delay
+                centroid.linlin(0, 1, 0.0, 1.0),
+                // Transform: flatness controls
+                flatness.linlin(0, 1, 0.2, 0.8)
+            ]);
+
+            decayTime = Select.kr(mode, [
+                // Mirror: spread = longer decay
+                spread.linlin(0, 1, baseDecayTime * 0.5, baseDecayTime * 2),
+                // Complement: spread = shorter decay
+                spread.linlin(0, 1, baseDecayTime * 2, baseDecayTime * 0.5),
+                // Transform: centroid controls
+                centroid.linlin(0, 1, baseDecayTime * 0.5, baseDecayTime * 1.5)
+            ]);
+
+            modRate = Select.kr(mode, [
+                baseModRate,
+                baseModRate,
+                centroid.linlin(0, 1, baseModRate * 0.5, baseModRate * 2)
+            ]);
+
+            modDepth = Select.kr(mode, [
+                baseModDepth,
+                baseModDepth,
+                spread.linlin(0, 1, baseModDepth * 0.5, baseModDepth * 2)
+            ]);
+
+            Out.kr(filterGainsBus, filterGains.lag(0.1));
+            Out.kr(granularCtrlBus, [grainDensity, grainSize, pitchScatter, posScatter].lag(0.1));
+            Out.kr(reverbDelayCtrlBus, [reverbDelayBlend, decayTime, modRate, modDepth].lag(0.1));
         }).add;
     }
 
