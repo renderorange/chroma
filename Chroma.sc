@@ -125,6 +125,7 @@ Chroma {
         this.loadInputSynthDef;
         this.loadAnalysisSynthDef;
         this.loadBlendControlSynthDef;
+        this.loadFilterSynthDef;
         this.loadOutputSynthDef;
     }
 
@@ -186,6 +187,36 @@ Chroma {
         // Placeholder - will be rewritten for effects
         SynthDef(\chroma_blend, { |mode=0|
             // Empty for now
+        }).add;
+    }
+
+    loadFilterSynthDef {
+        SynthDef(\chroma_filter, { |inBus, outBus, gainsBus, amount=0.5, baseCutoff=2000, resonance=0.3|
+            var sig, bands, gains, filtered;
+            var bandCenters = [60, 170, 400, 1000, 2400, 5000, 10000, 16000];
+            var rq = resonance.linlin(0, 1, 2, 0.1);
+
+            sig = In.ar(inBus);
+            gains = In.kr(gainsBus, 8);
+
+            // Apply amount control (0 = no spectral shaping, 1 = full)
+            gains = gains.linlin(0, 1, 1 - amount, 1 + amount);
+
+            // Scale band centers by base cutoff ratio
+            bandCenters = bandCenters * (baseCutoff / 2000);
+
+            // 8 parallel bandpass filters
+            bands = bandCenters.collect({ |freq, i|
+                BPF.ar(sig, freq.clip(20, 20000), rq) * gains[i];
+            });
+
+            // Sum bands and add some dry signal for body
+            filtered = bands.sum + (sig * 0.3);
+
+            // Soft clip to prevent overload
+            filtered = (filtered * 0.5).tanh;
+
+            Out.ar(outBus, filtered);
         }).add;
     }
 
