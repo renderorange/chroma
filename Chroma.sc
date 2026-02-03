@@ -128,6 +128,7 @@ Chroma {
         this.loadFilterSynthDef;
         this.loadGranularSynthDef;
         this.loadShimmerReverbSynthDef;
+        this.loadModDelaySynthDef;
         this.loadOutputSynthDef;
     }
 
@@ -401,6 +402,46 @@ Chroma {
 
             // Final reverb tail
             wet = FreeVerb.ar(verb, 0.8, decayTime.linlin(0.5, 10, 0.5, 0.95), 0.5);
+
+            sig = (dry * (1 - mix)) + (wet * mix);
+
+            Out.ar(outBus, sig);
+        }).add;
+    }
+
+    loadModDelaySynthDef {
+        SynthDef(\chroma_mod_delay, { |inBus, outBus, delayTime=0.3, decayTime=3,
+            modRate=0.5, modDepth=0.3, mix=0.3|
+
+            var sig, dry, wet, delayed, feedback;
+            var modAmount, modSig;
+
+            sig = In.ar(inBus);
+            dry = sig;
+
+            // Modulation amount in seconds
+            modAmount = modDepth * 0.01;  // Max 10ms wobble
+
+            // LFO for delay time modulation
+            modSig = SinOsc.kr(modRate) * modAmount;
+
+            // Feedback delay with modulation
+            feedback = LocalIn.ar(1);
+
+            delayed = DelayC.ar(
+                sig + (feedback * (decayTime / 10).clip(0, 0.85)),
+                1.0,  // Max delay time
+                (delayTime + modSig).clip(0.01, 1.0)
+            );
+
+            // Filtering in feedback path for warmth
+            delayed = LPF.ar(delayed, 4000);
+            delayed = HPF.ar(delayed, 80);
+
+            LocalOut.ar(delayed);
+
+            // Chorus widening
+            wet = delayed + DelayC.ar(delayed, 0.05, SinOsc.kr(modRate * 1.1) * 0.003 + 0.01);
 
             sig = (dry * (1 - mix)) + (wet * mix);
 
