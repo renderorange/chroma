@@ -443,13 +443,13 @@ Chroma {
             VLayout(
                 EZSlider(nil, 260@20, "Gain", [0, 2].asSpec, { |ez|
                     this.setInputGain(ez.value)
-                }, 1, layout: \horz),
+                }, 1, layout: \horz).view,
                 EZSlider(nil, 260@20, "Smoothing", [0.01, 0.5].asSpec, { |ez|
                     config[\smoothing] = ez.value;
                     if(synths[\analysis].notNil) {
                         synths[\analysis].set(\smoothing, ez.value);
                     };
-                }, config[\smoothing], layout: \horz),
+                }, config[\smoothing], layout: \horz).view,
                 StaticText().string_("Bands: " ++ config[\numBands])
             ).spacing_(10).margins_(5)
         );
@@ -459,13 +459,13 @@ Chroma {
             VLayout(
                 EZSlider(nil, 260@20, "Root", [24, 60, \lin, 1].asSpec, { |ez|
                     this.setRootNote(ez.value.asInteger);
-                }, config[\rootNote], layout: \horz),
+                }, config[\rootNote], layout: \horz).view,
                 EZSlider(nil, 260@20, "Dry/Wet", \unipolar.asSpec, { |ez|
                     this.setDryWet(ez.value)
-                }, dryWet, layout: \horz),
+                }, dryWet, layout: \horz).view,
                 EZSlider(nil, 260@20, "Drone", \unipolar.asSpec, { |ez|
                     this.setDroneLevel(ez.value)
-                }, droneLevel, layout: \horz)
+                }, droneLevel, layout: \horz).view
             ).spacing_(10).margins_(5)
         );
 
@@ -479,16 +479,16 @@ Chroma {
             HLayout(
                 EZSlider(nil, 130@20, "Sub", \unipolar.asSpec, { |ez|
                     this.setLayerAmp(\sub, ez.value)
-                }, layerAmps[0], layout: \horz),
+                }, layerAmps[0], layout: \horz).view,
                 EZSlider(nil, 130@20, "Pad", \unipolar.asSpec, { |ez|
                     this.setLayerAmp(\pad, ez.value)
-                }, layerAmps[1], layout: \horz),
+                }, layerAmps[1], layout: \horz).view,
                 EZSlider(nil, 130@20, "Shimmer", \unipolar.asSpec, { |ez|
                     this.setLayerAmp(\shimmer, ez.value)
-                }, layerAmps[2], layout: \horz),
+                }, layerAmps[2], layout: \horz).view,
                 EZSlider(nil, 130@20, "Noise", \unipolar.asSpec, { |ez|
                     this.setLayerAmp(\noise, ez.value)
-                }, layerAmps[3], layout: \horz)
+                }, layerAmps[3], layout: \horz).view
             ).spacing_(5)
         );
 
