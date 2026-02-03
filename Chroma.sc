@@ -127,6 +127,7 @@ Chroma {
         this.loadBlendControlSynthDef;
         this.loadFilterSynthDef;
         this.loadGranularSynthDef;
+        this.loadShimmerReverbSynthDef;
         this.loadOutputSynthDef;
     }
 
@@ -365,6 +366,43 @@ Chroma {
 
             // Mix dry and granular
             sig = (dry * (1 - mix)) + (grains * mix);
+
+            Out.ar(outBus, sig);
+        }).add;
+    }
+
+    loadShimmerReverbSynthDef {
+        SynthDef(\chroma_shimmer_reverb, { |inBus, outBus, decayTime=3, shimmerPitch=12, mix=0.3|
+            var sig, dry, wet, shifted, verb;
+            var pitchRatio;
+
+            sig = In.ar(inBus);
+            dry = sig;
+
+            // Pitch ratio from semitones
+            pitchRatio = shimmerPitch.midiratio;
+
+            // Create shimmer through pitch-shifted feedback
+            verb = sig;
+            verb = verb + LocalIn.ar(1);
+
+            // Diffusion via allpass chain
+            4.do { |i|
+                verb = AllpassC.ar(verb, 0.05, { Rand(0.01, 0.05) }.dup(1).sum, decayTime * 0.3);
+            };
+
+            // Pitch shift in feedback path
+            shifted = PitchShift.ar(verb, 0.2, pitchRatio, 0.01, 0.01) * 0.4;
+
+            // High-frequency damping
+            shifted = LPF.ar(shifted, 6000);
+
+            LocalOut.ar(shifted * (decayTime / 10).clip(0, 0.8));
+
+            // Final reverb tail
+            wet = FreeVerb.ar(verb, 0.8, decayTime.linlin(0.5, 10, 0.5, 0.95), 0.5);
+
+            sig = (dry * (1 - mix)) + (wet * mix);
 
             Out.ar(outBus, sig);
         }).add;
