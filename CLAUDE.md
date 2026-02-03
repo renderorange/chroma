@@ -12,5 +12,8 @@ Spectral-reactive drone synthesizer in SuperCollider. Analyzes input audio spect
 ## Current Status
 Design complete, ready for implementation.
 
+## Guidelines
+- Never add Co-Authored-By to commit messages
+
 ## Last Updated
 2026-02-02
