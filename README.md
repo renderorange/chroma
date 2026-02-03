@@ -59,11 +59,13 @@ Chroma.stop;   // Stop and cleanup
 | Control | Range | Description |
 |---------|-------|-------------|
 | Gain | 0-2 | Input amplification |
+| Input Freeze | on/off | Freeze input signal as sustained looping tone |
+| Loop | 50-500ms | Input freeze loop length |
 | Smoothing | 0.01-0.5s | Analysis response time |
 | Dry/Wet | 0-1 | Balance between dry input and processed signal |
 | Filter Amount | 0-1 | Spectral filter intensity |
 | Granular Mix | 0-1 | Granular effect level |
-| Freeze | on/off | Freeze granular buffer for sustained textures |
+| Grain Freeze | on/off | Freeze granular buffer for textural grains |
 | Reverb Mix | 0-1 | Shimmer reverb level |
 | Delay Mix | 0-1 | Modulated delay level |
 | Reverb/Delay Blend | 0-1 | Balance between reverb and delay paths |
@@ -79,14 +81,14 @@ Chroma.instance.setDryWet(0.7);
 ## Architecture
 
 ```
-Audio Input -> FFT Analysis -> Feature Extraction -> Control Buses
-                    |                                     |
-                    v                                     v
-              Spectral Filter <---- Blend Mode -----> Granular
-                    |                                     |
-                    v                                     v
-             Shimmer Reverb                        Mod Delay
-                    |                                     |
+Audio Input -> Input Freeze -> FFT Analysis -> Feature Extraction -> Control Buses
+                    |                                                      |
+                    v                                                      v
+              Spectral Filter <--------- Blend Mode ---------------> Granular
+                    |                                                      |
+                    v                                                      v
+             Shimmer Reverb                                          Mod Delay
+                    |                                                      |
                     +-----------> Output Mixer <----------+
 ```
 
