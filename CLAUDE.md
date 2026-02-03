@@ -4,7 +4,7 @@
 
 ## Project: Chroma
 
-Spectral-reactive drone synthesizer in SuperCollider. Analyzes input audio spectrum and uses it to shape evolving drone/pad textures with switchable blend modes (Mirror, Complement, Transform).
+Spectral-reactive effects processor in SuperCollider. Analyzes input audio spectrum and uses it to shape spectral filtering, granular processing, shimmer reverb, and modulated delay effects with switchable blend modes (Mirror, Complement, Transform).
 
 ## Project Files
 
@@ -21,18 +21,18 @@ Spectral-reactive drone synthesizer in SuperCollider. Analyzes input audio spect
 
 ## Current Status
 
-**✅ Implementation complete. All tests passing.**
+**Implementation complete. All tests passing.**
 
 | Task | Description | Status |
 |------|-------------|--------|
-| 1 | Project structure + Input stage | ✅ Complete |
-| 2 | Spectral analysis SynthDef | ✅ Complete |
-| 3 | Drone layer SynthDefs | ✅ Complete |
-| 4 | Blend mode control | ✅ Complete |
-| 5 | Output mixer | ✅ Complete |
-| 6 | GUI dashboard | ✅ Complete |
-| 7 | Startup script + docs | ✅ Complete |
-| 8 | Integration testing | ✅ Complete |
+| 1 | Project structure + Input stage | Complete |
+| 2 | Spectral analysis SynthDef | Complete |
+| 3 | Effects SynthDefs | Complete |
+| 4 | Blend mode control | Complete |
+| 5 | Output mixer | Complete |
+| 6 | GUI dashboard | Complete |
+| 7 | Startup script + docs | Complete |
+| 8 | Integration testing | Complete |
 
 ## Running Tests
 

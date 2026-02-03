@@ -1,10 +1,17 @@
 # Chroma
 
-Spectral-reactive drone synthesizer for SuperCollider.
+Spectral-reactive effects processor for SuperCollider.
 
 ## Overview
 
-Chroma analyzes the spectral content of incoming audio and uses that analysis to shape evolving drone and pad textures. Three blend modes define different relationships between input spectrum and output sound.
+Chroma analyzes the spectral content of incoming audio and uses that analysis to control a chain of effects processors. Three blend modes define different relationships between input spectrum and effect parameters.
+
+## Effects
+
+- **Spectral Filter**: Multi-band filter with spectrum-driven gain per band
+- **Granular Processor**: Granular synthesis with freeze capability
+- **Shimmer Reverb**: Pitch-shifted reverb for ethereal textures
+- **Modulated Delay**: Chorus-style delay with LFO modulation
 
 ## Requirements
 
@@ -39,9 +46,9 @@ Chroma.stop;   // Stop and cleanup
 
 ### Blend Modes
 
-- **Mirror**: Input spectrum directly shapes drone (loud bass = loud sub layer)
-- **Complement**: Inverted relationship (loud bass = quiet sub layer)
-- **Transform**: Spectral features map creatively (brightness shifts pitch)
+- **Mirror**: Input spectrum directly shapes effects (loud bass = more low-frequency filtering)
+- **Complement**: Inverted relationship (loud bass = less low-frequency filtering)
+- **Transform**: Spectral features map creatively (brightness affects pitch shift, spread controls grain density)
 
 ### Parameters
 
@@ -49,17 +56,19 @@ Chroma.stop;   // Stop and cleanup
 |---------|-------|-------------|
 | Gain | 0-2 | Input amplification |
 | Smoothing | 0.01-0.5s | Analysis response time |
-| Root | C1-C4 (MIDI 24-60) | Drone root pitch |
-| Dry/Wet | 0-1 | Input vs. drone balance |
-| Drone | 0-1 | Overall drone level |
-| Sub/Pad/Shimmer/Noise | 0-1 | Layer mix |
+| Dry/Wet | 0-1 | Balance between dry input and processed signal |
+| Filter Amount | 0-1 | Spectral filter intensity |
+| Granular Mix | 0-1 | Granular effect level |
+| Freeze | on/off | Freeze granular buffer for sustained textures |
+| Reverb Mix | 0-1 | Shimmer reverb level |
+| Delay Mix | 0-1 | Modulated delay level |
+| Reverb/Delay Blend | 0-1 | Balance between reverb and delay paths |
 
 ## Configuration
 
 ```supercollider
 // Access running instance
 Chroma.instance.setBlendMode(\transform);
-Chroma.instance.setRootNote(48);  // C3
 Chroma.instance.setDryWet(0.7);
 ```
 
@@ -67,10 +76,14 @@ Chroma.instance.setDryWet(0.7);
 
 ```
 Audio Input -> FFT Analysis -> Feature Extraction -> Control Buses
-                                                          |
-                                       Drone Layers (Sub/Pad/Shimmer/Noise)
-                                                          |
-                                                    Output Mixer
+                    |                                     |
+                    v                                     v
+              Spectral Filter <---- Blend Mode -----> Granular
+                    |                                     |
+                    v                                     v
+             Shimmer Reverb                        Mod Delay
+                    |                                     |
+                    +-----------> Output Mixer <----------+
 ```
 
 ## License and Copyright
