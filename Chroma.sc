@@ -18,6 +18,7 @@ Chroma {
     var <filterParams;
     var <granularParams;
     var <reverbDelayParams;
+    var <inputGain;
 
     *new { |server|
         ^super.new.init(server);
@@ -39,6 +40,7 @@ Chroma {
         frozen = false;
         inputFrozen = false;
         inputFreezeLength = 0.1;
+        inputGain = 1.0;
         filterParams = (
             amount: 0.5,
             cutoff: 2000,
@@ -92,6 +94,7 @@ Chroma {
             server.sync;
             this.createSynths;
             this.buildGUI;
+            this.setupOSC;
             "Chroma ready".postln;
         };
     }
@@ -897,6 +900,7 @@ Chroma {
     }
 
     cleanup {
+        this.cleanupOSC;
         synths.do(_.free);
         buses.do(_.free);
         fftBuffer.free;
@@ -905,6 +909,106 @@ Chroma {
         inputFreezeBuffer.free;
         if(window.notNil) { window.close };
         "Chroma stopped".postln;
+    }
+
+    setupOSC { |replyPort=9000|
+        var replyAddr = NetAddr("127.0.0.1", replyPort);
+
+        // Input controls
+        OSCdef(\chromaGain, { |msg| this.setInputGain(msg[1]) }, '/chroma/gain');
+        OSCdef(\chromaInputFreeze, { |msg|
+            if(msg[1].asBoolean != inputFrozen) { this.toggleInputFreeze };
+        }, '/chroma/inputFreeze');
+        OSCdef(\chromaInputFreezeLength, { |msg| this.setInputFreezeLength(msg[1]) }, '/chroma/inputFreezeLength');
+
+        // Filter controls
+        OSCdef(\chromaFilterAmount, { |msg| this.setFilterAmount(msg[1]) }, '/chroma/filterAmount');
+        OSCdef(\chromaFilterCutoff, { |msg| this.setFilterCutoff(msg[1]) }, '/chroma/filterCutoff');
+        OSCdef(\chromaFilterResonance, { |msg| this.setFilterResonance(msg[1]) }, '/chroma/filterResonance');
+
+        // Granular controls
+        OSCdef(\chromaGranularDensity, { |msg| this.setGrainDensity(msg[1]) }, '/chroma/granularDensity');
+        OSCdef(\chromaGranularSize, { |msg| this.setGrainSize(msg[1]) }, '/chroma/granularSize');
+        OSCdef(\chromaGranularPitchScatter, { |msg| this.setGrainPitchScatter(msg[1]) }, '/chroma/granularPitchScatter');
+        OSCdef(\chromaGranularPosScatter, { |msg| this.setGrainPosScatter(msg[1]) }, '/chroma/granularPosScatter');
+        OSCdef(\chromaGranularMix, { |msg| this.setGranularMix(msg[1]) }, '/chroma/granularMix');
+        OSCdef(\chromaGranularFreeze, { |msg|
+            if(msg[1].asBoolean != frozen) { this.toggleGranularFreeze };
+        }, '/chroma/granularFreeze');
+
+        // Reverb/Delay controls
+        OSCdef(\chromaReverbDelayBlend, { |msg| this.setReverbDelayBlend(msg[1]) }, '/chroma/reverbDelayBlend');
+        OSCdef(\chromaDecayTime, { |msg| this.setDecayTime(msg[1]) }, '/chroma/decayTime');
+        OSCdef(\chromaShimmerPitch, { |msg| this.setShimmerPitch(msg[1]) }, '/chroma/shimmerPitch');
+        OSCdef(\chromaDelayTime, { |msg| this.setDelayTime(msg[1]) }, '/chroma/delayTime');
+        OSCdef(\chromaModRate, { |msg| this.setModRate(msg[1]) }, '/chroma/modRate');
+        OSCdef(\chromaModDepth, { |msg| this.setModDepth(msg[1]) }, '/chroma/modDepth');
+        OSCdef(\chromaReverbDelayMix, { |msg| this.setReverbDelayMix(msg[1]) }, '/chroma/reverbDelayMix');
+
+        // Global controls
+        OSCdef(\chromaBlendMode, { |msg|
+            var modes = [\mirror, \complement, \transform];
+            this.setBlendMode(modes[msg[1].asInteger.clip(0, 2)]);
+        }, '/chroma/blendMode');
+        OSCdef(\chromaDryWet, { |msg| this.setDryWet(msg[1]) }, '/chroma/dryWet');
+
+        // Sync request - send full state
+        OSCdef(\chromaSync, { |msg|
+            this.sendState(replyAddr);
+        }, '/chroma/sync');
+
+        "Chroma OSC responders ready".postln;
+    }
+
+    sendState { |addr|
+        addr.sendMsg('/chroma/state',
+            inputGain,
+            inputFrozen.asInteger,
+            inputFreezeLength,
+            filterParams[\amount],
+            filterParams[\cutoff],
+            filterParams[\resonance],
+            granularParams[\density],
+            granularParams[\size],
+            granularParams[\pitchScatter],
+            granularParams[\posScatter],
+            granularParams[\mix],
+            frozen.asInteger,
+            reverbDelayParams[\blend],
+            reverbDelayParams[\decayTime],
+            reverbDelayParams[\shimmerPitch],
+            reverbDelayParams[\delayTime],
+            reverbDelayParams[\modRate],
+            reverbDelayParams[\modDepth],
+            reverbDelayParams[\mix],
+            this.blendModeIndex,
+            dryWet
+        );
+    }
+
+    cleanupOSC {
+        OSCdef(\chromaGain).free;
+        OSCdef(\chromaInputFreeze).free;
+        OSCdef(\chromaInputFreezeLength).free;
+        OSCdef(\chromaFilterAmount).free;
+        OSCdef(\chromaFilterCutoff).free;
+        OSCdef(\chromaFilterResonance).free;
+        OSCdef(\chromaGranularDensity).free;
+        OSCdef(\chromaGranularSize).free;
+        OSCdef(\chromaGranularPitchScatter).free;
+        OSCdef(\chromaGranularPosScatter).free;
+        OSCdef(\chromaGranularMix).free;
+        OSCdef(\chromaGranularFreeze).free;
+        OSCdef(\chromaReverbDelayBlend).free;
+        OSCdef(\chromaDecayTime).free;
+        OSCdef(\chromaShimmerPitch).free;
+        OSCdef(\chromaDelayTime).free;
+        OSCdef(\chromaModRate).free;
+        OSCdef(\chromaModDepth).free;
+        OSCdef(\chromaReverbDelayMix).free;
+        OSCdef(\chromaBlendMode).free;
+        OSCdef(\chromaDryWet).free;
+        OSCdef(\chromaSync).free;
     }
 
     blendModeIndex {
@@ -926,6 +1030,7 @@ Chroma {
     }
 
     setInputGain { |gain|
+        inputGain = gain;
         if(synths[\input].notNil) {
             synths[\input].set(\gain, gain);
         };

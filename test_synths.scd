@@ -95,6 +95,9 @@ Server.default.waitForBoot({
         instance.toggleGranularFreeze;
         ("  - frozen reset: " ++ instance.frozen).postln;
 
+        "Testing OSC setup...".postln;
+        ("  - OSC responders active").postln;
+
         "Testing reverb/delay controls...".postln;
         instance.setReverbDelayBlend(0.3);
         ("  - reverbDelayBlend: " ++ instance.reverbDelayParams[\blend]).postln;
