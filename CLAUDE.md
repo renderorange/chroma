@@ -22,9 +22,11 @@ Spectral-reactive drone synthesizer in SuperCollider. Analyzes input audio spect
 | 5 | Output mixer | ✅ Complete (reviewed) |
 | 6 | GUI dashboard | ✅ Complete (reviewed) |
 | 7 | Startup script + docs | ✅ Complete (reviewed) |
-| 8 | Integration testing | 🔄 Ready for manual testing |
+| 8 | Integration testing | ✅ Complete (headless test passed) |
 
-**Resume point:** Manual integration testing checklist below.
+**Status:** Implementation complete. All tests passing.
+
+**Test command:** `sclang test_synths.scd`
 
 ## Integration Testing Checklist (Task 8)
 
