@@ -31,15 +31,19 @@ Chroma analyzes the spectral content of incoming audio and uses that analysis to
 
 ### Quick Start
 
+```bash
+./run.sh --list        # List available audio devices
+./run.sh -d 1          # Use audio card 1 (e.g., USB interface) and save to config
+./run.sh               # Use saved device from config
+```
+
+The device selection is saved to `~/.config/chroma/config`.
+
+### From SuperCollider IDE
+
 ```supercollider
 Chroma.start;  // Launch with default settings
 Chroma.stop;   // Stop and cleanup
-```
-
-### Or run the startup script
-
-```supercollider
-"path/to/startup.scd".load;
 ```
 
 ## Controls

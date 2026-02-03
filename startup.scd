@@ -1,5 +1,5 @@
 // startup.scd - Chroma startup script
-// Run this file to launch Chroma
+// Run via ./run.sh for audio device selection
 
 (
 s.options.sampleRate = 48000;
@@ -8,10 +8,6 @@ s.options.memSize = 8192 * 4;
 
 s.waitForBoot {
     "Loading Chroma...".postln;
-
-    // Load the Chroma class if not already in extensions
-    // (thisProcess.nowExecutingPath.dirname +/+ "Chroma.sc").load;
-
     Chroma.start;
 };
 )

@@ -11,6 +11,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | File | Description |
 |------|-------------|
 | `Chroma.sc` | Main class (~525 lines) |
+| `run.sh` | Launcher with audio device selection |
 | `startup.scd` | Boot script with server options |
 | `run_gui.scd` | Simple GUI launcher |
 | `test_synths.scd` | Headless synth test (sclang) |
@@ -18,6 +19,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | `README.md` | User documentation |
 | `docs/plans/2026-02-03-chroma-effects-design.md` | Effects pedal design specification |
 | `docs/plans/2026-02-03-chroma-effects-implementation.md` | Effects implementation plan |
+| `docs/plans/2026-02-03-audio-device-selection-design.md` | Audio device selection design |
 
 ## Current Status
 
@@ -61,8 +63,10 @@ sclang test_synths.scd
 # Install class
 cp Chroma.sc ~/.local/share/SuperCollider/Extensions/
 
-# Run with GUI
-sclang run_gui.scd
+# List audio devices and select one
+./run.sh --list
+./run.sh -d 1    # Use card 1 (saved to ~/.config/chroma/config)
+./run.sh         # Use saved device
 
 # Or in SuperCollider IDE
 Chroma.start;
