@@ -577,8 +577,8 @@ Chroma {
     }
 
     buildGUI {
-        var width = 600, height = 500;
-        var spectrumViews, updateRoutine;
+        var width = 650, height = 580;
+        var spectrumView, updateRoutine;
         var bandData;
 
         bandData = Array.fill(config[\numBands], 0);
@@ -595,21 +595,21 @@ Chroma {
             .font_(Font("Helvetica", 24, true))
             .align_(\center);
 
-        // Spectrum displays
         window.view.decorator.nextLine;
-        StaticText(window, 280@20).string_("INPUT SPECTRUM").align_(\center);
-        StaticText(window, 280@20).string_("BLEND MODE").align_(\center);
+
+        // Spectrum and blend mode row
+        StaticText(window, 300@20).string_("INPUT SPECTRUM").align_(\center);
+        StaticText(window, 300@20).string_("BLEND MODE").align_(\center);
 
         window.view.decorator.nextLine;
 
-        // Input spectrum view
-        spectrumViews = ();
-        spectrumViews[\input] = UserView(window, 280@100)
+        // Spectrum display
+        spectrumView = UserView(window, 300@80)
             .background_(Color.gray(0.2))
             .drawFunc_({ |view|
                 var bounds = view.bounds;
                 var barWidth = bounds.width / config[\numBands];
-                Pen.fillColor = Color.new255(100, 149, 237);  // Cornflower blue
+                Pen.fillColor = Color.new255(100, 149, 237);
                 config[\numBands].do { |i|
                     var h = bandData[i] * bounds.height;
                     Pen.fillRect(Rect(i * barWidth + 2, bounds.height - h, barWidth - 4, h));
@@ -617,7 +617,7 @@ Chroma {
             });
 
         // Blend mode buttons
-        View(window, 280@100).layout_(
+        View(window, 300@80).layout_(
             VLayout(
                 HLayout(
                     Button().states_([["Mirror", Color.black, Color.green]])
@@ -630,109 +630,169 @@ Chroma {
             ).margins_(10)
         );
 
-        // Store button refs for highlighting
         window.view.children.last.children[0].children.do { |btn, i|
             [\mirrorBtn, \complementBtn, \transformBtn][i].envirPut(btn);
         };
 
         window.view.decorator.nextLine;
 
-        // Controls section
-        StaticText(window, 280@20).string_("INPUT").font_(Font("Helvetica", 14, true));
-        StaticText(window, 280@20).string_("DRONE").font_(Font("Helvetica", 14, true));
+        // Input and Filter sections
+        StaticText(window, 300@20).string_("INPUT").font_(Font("Helvetica", 12, true));
+        StaticText(window, 300@20).string_("SPECTRAL FILTER").font_(Font("Helvetica", 12, true));
 
         window.view.decorator.nextLine;
 
         // Input controls
-        View(window, 280@150).layout_(
+        View(window, 300@60).layout_(
             VLayout(
                 HLayout(
-                    [StaticText().string_("Gain").align_(\left), stretch: 0],
+                    StaticText().string_("Gain").fixedWidth_(60),
                     Slider().orientation_(\horizontal).value_(0.5).action_({ |sl|
-                        this.setInputGain(sl.value * 2);  // 0-2 range
-                    }),
-                    [NumberBox().value_(1).decimals_(2).maxWidth_(50).action_({ |nb|
-                        this.setInputGain(nb.value);
-                    }), stretch: 0]
-                ),
-                HLayout(
-                    [StaticText().string_("Smooth").align_(\left), stretch: 0],
-                    Slider().orientation_(\horizontal).value_(config[\smoothing] * 2).action_({ |sl|
-                        var val = sl.value * 0.5;  // 0-0.5 range
-                        config[\smoothing] = val;
-                        if(synths[\analysis].notNil) {
-                            synths[\analysis].set(\smoothing, val);
-                        };
-                    }),
-                    [NumberBox().value_(config[\smoothing]).decimals_(2).maxWidth_(50), stretch: 0]
-                ),
-                StaticText().string_("Bands: " ++ config[\numBands])
-            ).spacing_(10).margins_(5)
+                        this.setInputGain(sl.value * 2);
+                    })
+                )
+            ).margins_(5)
         );
 
-        // Drone controls
-        View(window, 280@150).layout_(
+        // Filter controls
+        View(window, 300@90).layout_(
             VLayout(
                 HLayout(
-                    [StaticText().string_("Root").align_(\left), stretch: 0],
-                    Slider().orientation_(\horizontal).value_((config[\rootNote] - 24) / 36).action_({ |sl|
-                        var midiNote = (sl.value * 36 + 24).round.asInteger;  // 24-60 range
-                        this.setRootNote(midiNote);
-                    }),
-                    [NumberBox().value_(config[\rootNote]).decimals_(0).maxWidth_(50).action_({ |nb|
-                        this.setRootNote(nb.value.asInteger);
-                    }), stretch: 0]
+                    StaticText().string_("Amount").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(filterParams[\amount]).action_({ |sl|
+                        this.setFilterAmount(sl.value);
+                    })
                 ),
                 HLayout(
-                    [StaticText().string_("Dry/Wet").align_(\left), stretch: 0],
-                    Slider().orientation_(\horizontal).value_(dryWet).action_({ |sl|
-                        this.setDryWet(sl.value);
-                    }),
-                    [NumberBox().value_(dryWet).decimals_(2).maxWidth_(50), stretch: 0]
+                    StaticText().string_("Cutoff").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(filterParams[\cutoff].linlin(200, 8000, 0, 1)).action_({ |sl|
+                        this.setFilterCutoff(sl.value.linlin(0, 1, 200, 8000));
+                    })
                 ),
                 HLayout(
-                    [StaticText().string_("Drone").align_(\left), stretch: 0],
-                    Slider().orientation_(\horizontal).value_(droneLevel).action_({ |sl|
-                        this.setDroneLevel(sl.value);
-                    }),
-                    [NumberBox().value_(droneLevel).decimals_(2).maxWidth_(50), stretch: 0]
+                    StaticText().string_("Resonance").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(filterParams[\resonance]).action_({ |sl|
+                        this.setFilterResonance(sl.value);
+                    })
                 )
-            ).spacing_(10).margins_(5)
+            ).margins_(5).spacing_(2)
         );
 
         window.view.decorator.nextLine;
 
-        // Layer mix
-        StaticText(window, (width - 20)@20).string_("LAYER MIX").font_(Font("Helvetica", 14, true));
+        // Granular and Reverb/Delay sections
+        StaticText(window, 300@20).string_("GRANULAR").font_(Font("Helvetica", 12, true));
+        StaticText(window, 300@20).string_("REVERB / DELAY").font_(Font("Helvetica", 12, true));
+
         window.view.decorator.nextLine;
 
-        View(window, (width - 20)@60).layout_(
-            HLayout(
-                VLayout(
-                    StaticText().string_("Sub").align_(\center),
-                    Slider().orientation_(\horizontal).value_(layerAmps[0]).action_({ |sl|
-                        this.setLayerAmp(\sub, sl.value);
+        // Granular controls
+        View(window, 300@180).layout_(
+            VLayout(
+                HLayout(
+                    StaticText().string_("Density").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(granularParams[\density].linlin(1, 50, 0, 1)).action_({ |sl|
+                        this.setGrainDensity(sl.value.linlin(0, 1, 1, 50));
                     })
                 ),
-                VLayout(
-                    StaticText().string_("Pad").align_(\center),
-                    Slider().orientation_(\horizontal).value_(layerAmps[1]).action_({ |sl|
-                        this.setLayerAmp(\pad, sl.value);
+                HLayout(
+                    StaticText().string_("Size").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(granularParams[\size].linlin(0.01, 0.5, 0, 1)).action_({ |sl|
+                        this.setGrainSize(sl.value.linlin(0, 1, 0.01, 0.5));
                     })
                 ),
-                VLayout(
-                    StaticText().string_("Shimmer").align_(\center),
-                    Slider().orientation_(\horizontal).value_(layerAmps[2]).action_({ |sl|
-                        this.setLayerAmp(\shimmer, sl.value);
+                HLayout(
+                    StaticText().string_("Pitch").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(granularParams[\pitchScatter]).action_({ |sl|
+                        this.setGrainPitchScatter(sl.value);
                     })
                 ),
-                VLayout(
-                    StaticText().string_("Noise").align_(\center),
-                    Slider().orientation_(\horizontal).value_(layerAmps[3]).action_({ |sl|
-                        this.setLayerAmp(\noise, sl.value);
+                HLayout(
+                    StaticText().string_("Position").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(granularParams[\posScatter]).action_({ |sl|
+                        this.setGrainPosScatter(sl.value);
+                    })
+                ),
+                HLayout(
+                    StaticText().string_("Mix").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(granularParams[\mix]).action_({ |sl|
+                        this.setGranularMix(sl.value);
+                    })
+                ),
+                Button().states_([
+                    ["FREEZE", Color.black, Color.white],
+                    ["FREEZE", Color.white, Color.green]
+                ]).action_({ |btn|
+                    this.toggleFreeze;
+                    btn.value = frozen.asInteger;
+                })
+            ).margins_(5).spacing_(2)
+        );
+
+        // Reverb/Delay controls
+        View(window, 300@180).layout_(
+            VLayout(
+                HLayout(
+                    StaticText().string_("Rev<>Dly").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\blend]).action_({ |sl|
+                        this.setReverbDelayBlend(sl.value);
+                    })
+                ),
+                HLayout(
+                    StaticText().string_("Decay").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\decayTime].linlin(0.5, 10, 0, 1)).action_({ |sl|
+                        this.setDecayTime(sl.value.linlin(0, 1, 0.5, 10));
+                    })
+                ),
+                HLayout(
+                    StaticText().string_("Shimmer").fixedWidth_(60),
+                    PopUpMenu().items_(["0 (off)", "+5 (4th)", "+7 (5th)", "+12 (oct)"])
+                        .value_(#[0, 5, 7, 12].indexOf(reverbDelayParams[\shimmerPitch]) ?? 3)
+                        .action_({ |menu|
+                            this.setShimmerPitch(#[0, 5, 7, 12][menu.value]);
+                        })
+                ),
+                HLayout(
+                    StaticText().string_("Delay").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\delayTime].linlin(0.1, 1, 0, 1)).action_({ |sl|
+                        this.setDelayTime(sl.value.linlin(0, 1, 0.1, 1));
+                    })
+                ),
+                HLayout(
+                    StaticText().string_("Mod Rate").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\modRate].linlin(0.1, 5, 0, 1)).action_({ |sl|
+                        this.setModRate(sl.value.linlin(0, 1, 0.1, 5));
+                    })
+                ),
+                HLayout(
+                    StaticText().string_("Mod Depth").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\modDepth]).action_({ |sl|
+                        this.setModDepth(sl.value);
+                    })
+                ),
+                HLayout(
+                    StaticText().string_("Mix").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\mix]).action_({ |sl|
+                        this.setReverbDelayMix(sl.value);
                     })
                 )
-            ).spacing_(5)
+            ).margins_(5).spacing_(2)
+        );
+
+        window.view.decorator.nextLine;
+
+        // Output section
+        StaticText(window, (width - 20)@20).string_("OUTPUT").font_(Font("Helvetica", 12, true));
+
+        window.view.decorator.nextLine;
+
+        View(window, (width - 20)@40).layout_(
+            HLayout(
+                StaticText().string_("Dry/Wet").fixedWidth_(60),
+                Slider().orientation_(\horizontal).value_(dryWet).action_({ |sl|
+                    this.setDryWet(sl.value);
+                })
+            ).margins_(5)
         );
 
         // Spectrum update routine
@@ -740,9 +800,9 @@ Chroma {
             loop {
                 buses[\bands].getn(config[\numBands], { |vals|
                     bandData = vals;
-                    { spectrumViews[\input].refresh }.defer;
+                    { spectrumView.refresh }.defer;
                 });
-                0.033.wait;  // ~30fps
+                0.033.wait;
             }
         }).play(AppClock);
 
