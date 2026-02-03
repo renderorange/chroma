@@ -132,3 +132,7 @@ func (m *Model) Focused() control {
 func (m *Model) IsConnected() bool {
 	return m.connected
 }
+
+func (m *Model) SetMidiPort(name string) {
+	m.midiPort = name
+}
