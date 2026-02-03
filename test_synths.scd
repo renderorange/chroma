@@ -79,11 +79,20 @@ Server.default.waitForBoot({
         instance.setGranularMix(0.5);
         ("  - granularMix: " ++ instance.granularParams[\mix]).postln;
 
-        "Testing freeze toggle...".postln;
+        "Testing input freeze...".postln;
+        ("  - inputFrozen before: " ++ instance.inputFrozen).postln;
+        instance.toggleInputFreeze;
+        ("  - inputFrozen after: " ++ instance.inputFrozen).postln;
+        instance.toggleInputFreeze;
+        ("  - inputFrozen reset: " ++ instance.inputFrozen).postln;
+        instance.setInputFreezeLength(0.2);
+        ("  - inputFreezeLength: " ++ instance.inputFreezeLength).postln;
+
+        "Testing granular freeze toggle...".postln;
         ("  - frozen before: " ++ instance.frozen).postln;
-        instance.toggleFreeze;
+        instance.toggleGranularFreeze;
         ("  - frozen after: " ++ instance.frozen).postln;
-        instance.toggleFreeze;
+        instance.toggleGranularFreeze;
         ("  - frozen reset: " ++ instance.frozen).postln;
 
         "Testing reverb/delay controls...".postln;
