@@ -172,21 +172,21 @@ Chroma {
             // Mode 2: Transform - feature-based mapping
 
             subAmp = Select.kr(mode, [
-                bands[0..1].sum * baseSubAmp,           // Mirror: low bands
-                (1 - bands[0..1].sum) * baseSubAmp,    // Complement: inverted
-                (1 - flatness) * baseSubAmp             // Transform: tonality -> sub
+                bands[0..1].sum.clip(0, 1) * baseSubAmp,           // Mirror: low bands
+                (1 - bands[0..1].sum.clip(0, 1)) * baseSubAmp,    // Complement: inverted
+                (1 - flatness) * baseSubAmp                        // Transform: tonality -> sub
             ]);
 
             padAmp = Select.kr(mode, [
-                bands[2..4].sum * basePadAmp,           // Mirror: mid bands
-                (1 - bands[2..4].sum) * basePadAmp,    // Complement
-                centroid.linlin(0, 1, 0.5, 1) * basePadAmp  // Transform
+                bands[2..4].sum.clip(0, 1) * basePadAmp,           // Mirror: mid bands
+                (1 - bands[2..4].sum.clip(0, 1)) * basePadAmp,    // Complement
+                centroid.linlin(0, 1, 0.5, 1) * basePadAmp         // Transform
             ]);
 
             shimmerAmp = Select.kr(mode, [
-                bands[5..7].sum * baseShimmerAmp,       // Mirror: high bands
-                (1 - bands[5..7].sum) * baseShimmerAmp, // Complement
-                centroid * baseShimmerAmp               // Transform: brightness -> shimmer
+                bands[5..7].sum.clip(0, 1) * baseShimmerAmp,       // Mirror: high bands
+                (1 - bands[5..7].sum.clip(0, 1)) * baseShimmerAmp, // Complement
+                centroid * baseShimmerAmp                          // Transform: brightness -> shimmer
             ]);
 
             noiseAmp = Select.kr(mode, [
