@@ -75,6 +75,7 @@ Chroma.start;
 
 ## Guidelines
 - Never add Co-Authored-By to commit messages
+- Update all documentation (README.md, CLAUDE.md, design docs) after any code changes
 
 ## Last Updated
 2026-02-03
