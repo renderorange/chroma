@@ -50,6 +50,7 @@ Chroma {
     boot {
         server.waitForBoot {
             this.allocateResources;
+            server.sync;  // Ensure buffer is allocated before SynthDefs use it
             this.loadSynthDefs;
             server.sync;
             this.createSynths;
@@ -75,6 +76,7 @@ Chroma {
 
     loadSynthDefs {
         this.loadInputSynthDef;
+        this.loadAnalysisSynthDef;
     }
 
     loadInputSynthDef {
@@ -87,6 +89,50 @@ Chroma {
         }).add;
     }
 
+    loadAnalysisSynthDef {
+        SynthDef(\chroma_analysis, { |inBus, fftBuf, numBands=8, smoothing=0.1,
+            bandsBus, centroidBus, spreadBus, flatnessBus|
+            var sig, chain, centroid, spread, flatness;
+            var bandMags, bandFiltered;
+            // Band center frequencies and reciprocal Q values for 8 bands
+            // sub, bass, low-mid, mid, upper-mid, presence, brilliance, air
+            var bandCenters = [30, 120, 375, 1000, 3000, 5000, 9000, 16000];
+            var bandRQs = [1, 1, 1, 1, 1, 1, 1, 1];
+
+            sig = In.ar(inBus);
+            chain = FFT(fftBuf, sig, hop: 0.5, wintype: 1);
+
+            // Spectral features from FFT
+            centroid = SpecCentroid.kr(chain);
+            spread = SpecPcile.kr(chain, 0.9) - SpecPcile.kr(chain, 0.1);
+            flatness = SpecFlatness.kr(chain);
+
+            // Normalize centroid (0-20kHz -> 0-1)
+            centroid = (centroid / 20000).clip(0, 1);
+            // Normalize spread
+            spread = (spread / 10000).clip(0, 1);
+            // Flatness is already 0-1
+
+            // Band magnitudes using bandpass filters with amplitude followers
+            // More portable than FFTSubbandPower (which requires sc3-plugins)
+            bandFiltered = BPF.ar(sig, bandCenters, bandRQs);
+            bandMags = Amplitude.kr(bandFiltered, 0.01, 0.1);
+            bandMags = bandMags.collect({ |mag|
+                Lag.kr(mag.ampdb.linlin(-60, 0, 0, 1).clip(0, 1), smoothing);
+            });
+
+            // Smooth all outputs
+            centroid = Lag.kr(centroid, smoothing);
+            spread = Lag.kr(spread, smoothing);
+            flatness = Lag.kr(flatness, smoothing);
+
+            Out.kr(bandsBus, bandMags);
+            Out.kr(centroidBus, centroid);
+            Out.kr(spreadBus, spread);
+            Out.kr(flatnessBus, flatness);
+        }).add;
+    }
+
     createSynths {
         synths[\input] = Synth(\chroma_input, [
             \inChannel, config[\inputChannel],
@@ -94,6 +140,17 @@ Chroma {
             \outBus, buses[\inputAudio],
             \ampBus, buses[\inputAmp]
         ]);
+
+        synths[\analysis] = Synth(\chroma_analysis, [
+            \inBus, buses[\inputAudio],
+            \fftBuf, fftBuffer,
+            \numBands, config[\numBands],
+            \smoothing, config[\smoothing],
+            \bandsBus, buses[\bands],
+            \centroidBus, buses[\centroid],
+            \spreadBus, buses[\spread],
+            \flatnessBus, buses[\flatness]
+        ], synths[\input], \addAfter);
     }
 
     buildGUI {
