@@ -500,17 +500,80 @@ Chroma {
             \flatnessBus, buses[\flatness]
         ], synths[\input], \addAfter);
 
-        // Blend control (commented out - will be restored in Task 4)
-        // synths[\blend] = Synth(\chroma_blend, [
-        //     \mode, this.blendModeIndex
-        // ], synths[\analysis], \addAfter);
+        // Blend control
+        synths[\blend] = Synth(\chroma_blend, [
+            \mode, this.blendModeIndex,
+            \bandsBus, buses[\bands],
+            \centroidBus, buses[\centroid],
+            \spreadBus, buses[\spread],
+            \flatnessBus, buses[\flatness],
+            \filterGainsBus, buses[\filterGains],
+            \granularCtrlBus, buses[\granularCtrl],
+            \reverbDelayCtrlBus, buses[\reverbDelayCtrl],
+            \baseFilterAmount, filterParams[\amount],
+            \baseGrainDensity, granularParams[\density],
+            \baseGrainSize, granularParams[\size],
+            \basePitchScatter, granularParams[\pitchScatter],
+            \basePosScatter, granularParams[\posScatter],
+            \baseReverbDelayBlend, reverbDelayParams[\blend],
+            \baseDecayTime, reverbDelayParams[\decayTime],
+            \baseModRate, reverbDelayParams[\modRate],
+            \baseModDepth, reverbDelayParams[\modDepth]
+        ], synths[\analysis], \addAfter);
+
+        // Spectral filter
+        synths[\filter] = Synth(\chroma_filter, [
+            \inBus, buses[\inputAudio],
+            \outBus, buses[\filteredAudio],
+            \gainsBus, buses[\filterGains],
+            \amount, filterParams[\amount],
+            \baseCutoff, filterParams[\cutoff],
+            \resonance, filterParams[\resonance]
+        ], synths[\blend], \addAfter);
+
+        // Granular (reads from filtered audio)
+        synths[\granular] = Synth(\chroma_granular, [
+            \inBus, buses[\filteredAudio],
+            \outBus, buses[\granularAudio],
+            \grainBuf, grainBuffer,
+            \freezeBuf, freezeBuffer,
+            \ctrlBus, buses[\granularCtrl],
+            \freeze, frozen.asInteger,
+            \mix, granularParams[\mix]
+        ], synths[\filter], \addAfter);
+
+        // Shimmer reverb (reads from filtered audio)
+        synths[\shimmerReverb] = Synth(\chroma_shimmer_reverb, [
+            \inBus, buses[\filteredAudio],
+            \outBus, buses[\reverbAudio],
+            \decayTime, reverbDelayParams[\decayTime],
+            \shimmerPitch, reverbDelayParams[\shimmerPitch],
+            \mix, reverbDelayParams[\mix]
+        ], synths[\granular], \addAfter);
+
+        // Modulated delay (reads from filtered audio)
+        synths[\modDelay] = Synth(\chroma_mod_delay, [
+            \inBus, buses[\filteredAudio],
+            \outBus, buses[\delayAudio],
+            \delayTime, reverbDelayParams[\delayTime],
+            \decayTime, reverbDelayParams[\decayTime],
+            \modRate, reverbDelayParams[\modRate],
+            \modDepth, reverbDelayParams[\modDepth],
+            \mix, reverbDelayParams[\mix]
+        ], synths[\shimmerReverb], \addAfter);
 
         // Output mixer (at tail)
         synths[\output] = Synth(\chroma_output, [
-            \inBus, buses[\inputAudio],
-            \droneLevel, droneLevel,
+            \inBus, buses[\filteredAudio],
+            \granularBus, buses[\granularAudio],
+            \reverbBus, buses[\reverbAudio],
+            \delayBus, buses[\delayAudio],
+            \reverbDelayBlend, reverbDelayParams[\blend],
             \dryWet, dryWet
         ], nil, \addToTail);
+
+        // Map control buses
+        synths[\granular].map(\ctrlBus, buses[\granularCtrl]);
     }
 
     buildGUI {
@@ -746,5 +809,87 @@ Chroma {
         if(synths[\granular].notNil) {
             synths[\granular].set(\freeze, frozen.asInteger);
         };
+    }
+
+    setFilterAmount { |val|
+        filterParams[\amount] = val.clip(0, 1);
+        if(synths[\filter].notNil) { synths[\filter].set(\amount, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseFilterAmount, val) };
+    }
+
+    setFilterCutoff { |val|
+        filterParams[\cutoff] = val.clip(200, 8000);
+        if(synths[\filter].notNil) { synths[\filter].set(\baseCutoff, val) };
+    }
+
+    setFilterResonance { |val|
+        filterParams[\resonance] = val.clip(0, 1);
+        if(synths[\filter].notNil) { synths[\filter].set(\resonance, val) };
+    }
+
+    setGrainDensity { |val|
+        granularParams[\density] = val.clip(1, 50);
+        if(synths[\blend].notNil) { synths[\blend].set(\baseGrainDensity, val) };
+    }
+
+    setGrainSize { |val|
+        granularParams[\size] = val.clip(0.01, 0.5);
+        if(synths[\blend].notNil) { synths[\blend].set(\baseGrainSize, val) };
+    }
+
+    setGrainPitchScatter { |val|
+        granularParams[\pitchScatter] = val.clip(0, 1);
+        if(synths[\blend].notNil) { synths[\blend].set(\basePitchScatter, val) };
+    }
+
+    setGrainPosScatter { |val|
+        granularParams[\posScatter] = val.clip(0, 1);
+        if(synths[\blend].notNil) { synths[\blend].set(\basePosScatter, val) };
+    }
+
+    setGranularMix { |val|
+        granularParams[\mix] = val.clip(0, 1);
+        if(synths[\granular].notNil) { synths[\granular].set(\mix, val) };
+    }
+
+    setReverbDelayBlend { |val|
+        reverbDelayParams[\blend] = val.clip(0, 1);
+        if(synths[\output].notNil) { synths[\output].set(\reverbDelayBlend, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseReverbDelayBlend, val) };
+    }
+
+    setDecayTime { |val|
+        reverbDelayParams[\decayTime] = val.clip(0.5, 10);
+        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\decayTime, val) };
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\decayTime, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseDecayTime, val) };
+    }
+
+    setShimmerPitch { |val|
+        reverbDelayParams[\shimmerPitch] = val;
+        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\shimmerPitch, val) };
+    }
+
+    setDelayTime { |val|
+        reverbDelayParams[\delayTime] = val.clip(0.1, 1);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\delayTime, val) };
+    }
+
+    setModRate { |val|
+        reverbDelayParams[\modRate] = val.clip(0.1, 5);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modRate, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseModRate, val) };
+    }
+
+    setModDepth { |val|
+        reverbDelayParams[\modDepth] = val.clip(0, 1);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modDepth, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseModDepth, val) };
+    }
+
+    setReverbDelayMix { |val|
+        reverbDelayParams[\mix] = val.clip(0, 1);
+        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\mix, val) };
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\mix, val) };
     }
 }
