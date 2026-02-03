@@ -16,8 +16,8 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | `test_synths.scd` | Headless synth test (sclang) |
 | `test_integration.sh` | Full integration test suite (bash) |
 | `README.md` | User documentation |
-| `docs/plans/2026-02-02-chroma-design.md` | Design specification |
-| `docs/plans/2026-02-02-chroma-implementation.md` | Implementation plan |
+| `docs/plans/2026-02-03-chroma-effects-design.md` | Effects pedal design specification |
+| `docs/plans/2026-02-03-chroma-effects-implementation.md` | Effects implementation plan |
 
 ## Current Status
 
@@ -25,14 +25,19 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 
 | Task | Description | Status |
 |------|-------------|--------|
-| 1 | Project structure + Input stage | Complete |
-| 2 | Spectral analysis SynthDef | Complete |
-| 3 | Effects SynthDefs | Complete |
-| 4 | Blend mode control | Complete |
-| 5 | Output mixer | Complete |
-| 6 | GUI dashboard | Complete |
-| 7 | Startup script + docs | Complete |
-| 8 | Integration testing | Complete |
+| 1 | Remove drone layer code | Complete |
+| 2 | Add effect buses and buffers | Complete |
+| 3 | Spectral filter SynthDef | Complete |
+| 4 | Blend control for effects | Complete |
+| 5 | Granular SynthDef with freeze | Complete |
+| 6 | Shimmer reverb SynthDef | Complete |
+| 7 | Modulated delay SynthDef | Complete |
+| 8 | Output mixer | Complete |
+| 9 | Wire up synth creation | Complete |
+| 10 | Rebuild GUI | Complete |
+| 11 | Update tests | Complete |
+| 12 | Update documentation | Complete |
+| 13 | Integration testing | Complete |
 
 ## Running Tests
 
