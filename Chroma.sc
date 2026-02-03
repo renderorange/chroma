@@ -372,7 +372,155 @@ Chroma {
     }
 
     buildGUI {
-        // Placeholder - Task 6
+        var width = 600, height = 500;
+        var spectrumViews, updateRoutine;
+        var bandData;
+
+        bandData = Array.fill(config[\numBands], 0);
+
+        window = Window("Chroma", Rect(100, 100, width, height))
+            .front
+            .onClose_({ this.class.stop });
+
+        window.view.decorator = FlowLayout(window.view.bounds, 10@10, 10@10);
+
+        // Title
+        StaticText(window, (width - 20)@30)
+            .string_("CHROMA")
+            .font_(Font("Helvetica", 24, true))
+            .align_(\center);
+
+        // Spectrum displays
+        window.view.decorator.nextLine;
+        StaticText(window, 280@20).string_("INPUT SPECTRUM").align_(\center);
+        StaticText(window, 280@20).string_("BLEND MODE").align_(\center);
+
+        window.view.decorator.nextLine;
+
+        // Input spectrum view
+        spectrumViews = ();
+        spectrumViews[\input] = UserView(window, 280@100)
+            .background_(Color.gray(0.2))
+            .drawFunc_({ |view|
+                var bounds = view.bounds;
+                var barWidth = bounds.width / config[\numBands];
+                Pen.fillColor = Color.new255(100, 149, 237);  // Cornflower blue
+                config[\numBands].do { |i|
+                    var h = bandData[i] * bounds.height;
+                    Pen.fillRect(Rect(i * barWidth + 2, bounds.height - h, barWidth - 4, h));
+                };
+            });
+
+        // Blend mode buttons
+        View(window, 280@100).layout_(
+            VLayout(
+                HLayout(
+                    Button().states_([["Mirror", Color.black, Color.green]])
+                        .action_({ this.setBlendMode(\mirror); this.updateBlendButtons }),
+                    Button().states_([["Complement", Color.black, Color.white]])
+                        .action_({ this.setBlendMode(\complement); this.updateBlendButtons }),
+                    Button().states_([["Transform", Color.black, Color.white]])
+                        .action_({ this.setBlendMode(\transform); this.updateBlendButtons })
+                ).spacing_(5)
+            ).margins_(10)
+        );
+
+        // Store button refs for highlighting
+        window.view.children.last.children[0].children.do { |btn, i|
+            [\mirrorBtn, \complementBtn, \transformBtn][i].envirPut(btn);
+        };
+
+        window.view.decorator.nextLine;
+
+        // Controls section
+        StaticText(window, 280@20).string_("INPUT").font_(Font("Helvetica", 14, true));
+        StaticText(window, 280@20).string_("DRONE").font_(Font("Helvetica", 14, true));
+
+        window.view.decorator.nextLine;
+
+        // Input controls
+        View(window, 280@150).layout_(
+            VLayout(
+                EZSlider(nil, 260@20, "Gain", [0, 2].asSpec, { |ez|
+                    this.setInputGain(ez.value)
+                }, 1, layout: \horz),
+                EZSlider(nil, 260@20, "Smoothing", [0.01, 0.5].asSpec, { |ez|
+                    config[\smoothing] = ez.value;
+                    if(synths[\analysis].notNil) {
+                        synths[\analysis].set(\smoothing, ez.value);
+                    };
+                }, config[\smoothing], layout: \horz),
+                StaticText().string_("Bands: " ++ config[\numBands])
+            ).spacing_(10).margins_(5)
+        );
+
+        // Drone controls
+        View(window, 280@150).layout_(
+            VLayout(
+                EZSlider(nil, 260@20, "Root", [24, 60, \lin, 1].asSpec, { |ez|
+                    this.setRootNote(ez.value.asInteger);
+                }, config[\rootNote], layout: \horz),
+                EZSlider(nil, 260@20, "Dry/Wet", \unipolar.asSpec, { |ez|
+                    this.setDryWet(ez.value)
+                }, dryWet, layout: \horz),
+                EZSlider(nil, 260@20, "Drone", \unipolar.asSpec, { |ez|
+                    this.setDroneLevel(ez.value)
+                }, droneLevel, layout: \horz)
+            ).spacing_(10).margins_(5)
+        );
+
+        window.view.decorator.nextLine;
+
+        // Layer mix
+        StaticText(window, (width - 20)@20).string_("LAYER MIX").font_(Font("Helvetica", 14, true));
+        window.view.decorator.nextLine;
+
+        View(window, (width - 20)@30).layout_(
+            HLayout(
+                EZSlider(nil, 130@20, "Sub", \unipolar.asSpec, { |ez|
+                    this.setLayerAmp(\sub, ez.value)
+                }, layerAmps[0], layout: \horz),
+                EZSlider(nil, 130@20, "Pad", \unipolar.asSpec, { |ez|
+                    this.setLayerAmp(\pad, ez.value)
+                }, layerAmps[1], layout: \horz),
+                EZSlider(nil, 130@20, "Shimmer", \unipolar.asSpec, { |ez|
+                    this.setLayerAmp(\shimmer, ez.value)
+                }, layerAmps[2], layout: \horz),
+                EZSlider(nil, 130@20, "Noise", \unipolar.asSpec, { |ez|
+                    this.setLayerAmp(\noise, ez.value)
+                }, layerAmps[3], layout: \horz)
+            ).spacing_(5)
+        );
+
+        // Spectrum update routine
+        updateRoutine = Routine({
+            loop {
+                buses[\bands].getn(config[\numBands], { |vals|
+                    bandData = vals;
+                    { spectrumViews[\input].refresh }.defer;
+                });
+                0.033.wait;  // ~30fps
+            }
+        }).play(AppClock);
+
+        window.onClose = window.onClose.addFunc({
+            updateRoutine.stop;
+        });
+    }
+
+    updateBlendButtons {
+        var buttons = [\mirrorBtn, \complementBtn, \transformBtn];
+        var modes = [\mirror, \complement, \transform];
+        buttons.do { |key, i|
+            var btn = key.envirGet;
+            if(btn.notNil) {
+                if(modes[i] == blendMode) {
+                    btn.states_([[btn.states[0][0], Color.black, Color.green]]);
+                } {
+                    btn.states_([[btn.states[0][0], Color.black, Color.white]]);
+                };
+            };
+        };
     }
 
     cleanup {
