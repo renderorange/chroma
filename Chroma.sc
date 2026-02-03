@@ -12,6 +12,9 @@ Chroma {
     var <grainBuffer;
     var <freezeBuffer;
     var <frozen;
+    var <inputFreezeBuffer;
+    var <inputFrozen;
+    var <inputFreezeLength;
     var <filterParams;
     var <granularParams;
     var <reverbDelayParams;
@@ -34,6 +37,8 @@ Chroma {
         blendMode = \mirror;
         dryWet = 0.5;
         frozen = false;
+        inputFrozen = false;
+        inputFreezeLength = 0.1;
         filterParams = (
             amount: 0.5,
             cutoff: 2000,
@@ -119,10 +124,17 @@ Chroma {
         // Grain buffers (2 seconds at server sample rate)
         grainBuffer = Buffer.alloc(server, server.sampleRate * 2, 1);
         freezeBuffer = Buffer.alloc(server, server.sampleRate * 2, 1);
+
+        // Input freeze buffer (0.5 seconds max loop length)
+        inputFreezeBuffer = Buffer.alloc(server, (server.sampleRate * 0.5).asInteger, 1);
+
+        // Bus for frozen audio output
+        buses[\frozenAudio] = Bus.audio(server, 1);
     }
 
     loadSynthDefs {
         this.loadInputSynthDef;
+        this.loadInputFreezeSynthDef;
         this.loadAnalysisSynthDef;
         this.loadBlendControlSynthDef;
         this.loadFilterSynthDef;
@@ -138,6 +150,42 @@ Chroma {
             sig = SoundIn.ar(inChannel) * gain;
             amp = Amplitude.kr(sig, 0.01, 0.1);
             Out.kr(ampBus, amp);
+            Out.ar(outBus, sig);
+        }).add;
+    }
+
+    loadInputFreezeSynthDef {
+        SynthDef(\chroma_input_freeze, { |inBus, outBus, freezeBuf, freeze=0, loopLength=0.1|
+            var sig, bufFrames, maxLoopFrames, loopFrames;
+            var writePos, readPos1, readPos2;
+            var env1, env2, out1, out2, frozen;
+
+            sig = In.ar(inBus);
+            bufFrames = BufFrames.kr(freezeBuf);
+            maxLoopFrames = bufFrames;
+            loopFrames = (loopLength * SampleRate.ir).clip(1, maxLoopFrames);
+
+            // Write position - continuously writes when not frozen
+            writePos = Phasor.ar(0, 1 - freeze, 0, bufFrames);
+            BufWr.ar(sig, freezeBuf, writePos);
+
+            // Two read positions for crossfade looping
+            // When frozen, loop through loopFrames with crossfade
+            readPos1 = Phasor.ar(0, freeze, 0, loopFrames);
+            readPos2 = (readPos1 + (loopFrames * 0.5)).wrap(0, loopFrames);
+
+            // Crossfade envelopes - triangle waves offset by half period
+            env1 = (readPos1 / loopFrames * 2).fold(0, 1);
+            env2 = (readPos2 / loopFrames * 2).fold(0, 1);
+
+            // Read from buffer
+            out1 = BufRd.ar(1, freezeBuf, readPos1, interpolation: 4) * env1;
+            out2 = BufRd.ar(1, freezeBuf, readPos2, interpolation: 4) * env2;
+
+            // Combine crossfaded outputs when frozen, otherwise pass through
+            frozen = (out1 + out2) * 2;  // *2 to compensate for crossfade amplitude
+            sig = Select.ar(freeze, [sig, frozen]);
+
             Out.ar(outBus, sig);
         }).add;
     }
@@ -488,9 +536,18 @@ Chroma {
             \ampBus, buses[\inputAmp]
         ]);
 
-        // Analysis
-        synths[\analysis] = Synth(\chroma_analysis, [
+        // Input freeze (between input and analysis)
+        synths[\inputFreeze] = Synth(\chroma_input_freeze, [
             \inBus, buses[\inputAudio],
+            \outBus, buses[\frozenAudio],
+            \freezeBuf, inputFreezeBuffer,
+            \freeze, inputFrozen.asInteger,
+            \loopLength, inputFreezeLength
+        ], synths[\input], \addAfter);
+
+        // Analysis (reads from frozen audio)
+        synths[\analysis] = Synth(\chroma_analysis, [
+            \inBus, buses[\frozenAudio],
             \fftBuf, fftBuffer,
             \numBands, config[\numBands],
             \smoothing, config[\smoothing],
@@ -498,7 +555,7 @@ Chroma {
             \centroidBus, buses[\centroid],
             \spreadBus, buses[\spread],
             \flatnessBus, buses[\flatness]
-        ], synths[\input], \addAfter);
+        ], synths[\inputFreeze], \addAfter);
 
         // Blend control
         synths[\blend] = Synth(\chroma_blend, [
@@ -521,9 +578,9 @@ Chroma {
             \baseModDepth, reverbDelayParams[\modDepth]
         ], synths[\analysis], \addAfter);
 
-        // Spectral filter
+        // Spectral filter (reads from frozen audio)
         synths[\filter] = Synth(\chroma_filter, [
-            \inBus, buses[\inputAudio],
+            \inBus, buses[\frozenAudio],
             \outBus, buses[\filteredAudio],
             \gainsBus, buses[\filterGains],
             \amount, filterParams[\amount],
@@ -643,15 +700,28 @@ Chroma {
         window.view.decorator.nextLine;
 
         // Input controls
-        View(window, 300@60).layout_(
+        View(window, 300@100).layout_(
             VLayout(
                 HLayout(
                     StaticText().string_("Gain").fixedWidth_(60),
                     Slider().orientation_(\horizontal).value_(0.5).action_({ |sl|
                         this.setInputGain(sl.value * 2);
                     })
-                )
-            ).margins_(5)
+                ),
+                HLayout(
+                    StaticText().string_("Loop").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(inputFreezeLength.linlin(0.05, 0.5, 0, 1)).action_({ |sl|
+                        this.setInputFreezeLength(sl.value.linlin(0, 1, 0.05, 0.5));
+                    })
+                ),
+                Button().states_([
+                    ["INPUT FREEZE", Color.black, Color.white],
+                    ["INPUT FREEZE", Color.white, Color.red]
+                ]).action_({ |btn|
+                    this.toggleInputFreeze;
+                    btn.value = inputFrozen.asInteger;
+                })
+            ).margins_(5).spacing_(2)
         );
 
         // Filter controls
@@ -720,10 +790,10 @@ Chroma {
                     })
                 ),
                 Button().states_([
-                    ["FREEZE", Color.black, Color.white],
-                    ["FREEZE", Color.white, Color.green]
+                    ["GRAIN FREEZE", Color.black, Color.white],
+                    ["GRAIN FREEZE", Color.white, Color.green]
                 ]).action_({ |btn|
-                    this.toggleFreeze;
+                    this.toggleGranularFreeze;
                     btn.value = frozen.asInteger;
                 })
             ).margins_(5).spacing_(2)
@@ -832,6 +902,7 @@ Chroma {
         fftBuffer.free;
         grainBuffer.free;
         freezeBuffer.free;
+        inputFreezeBuffer.free;
         if(window.notNil) { window.close };
         "Chroma stopped".postln;
     }
@@ -860,7 +931,21 @@ Chroma {
         };
     }
 
-    toggleFreeze {
+    toggleInputFreeze {
+        inputFrozen = inputFrozen.not;
+        if(synths[\inputFreeze].notNil) {
+            synths[\inputFreeze].set(\freeze, inputFrozen.asInteger);
+        };
+    }
+
+    setInputFreezeLength { |val|
+        inputFreezeLength = val.clip(0.05, 0.5);
+        if(synths[\inputFreeze].notNil) {
+            synths[\inputFreeze].set(\loopLength, inputFreezeLength);
+        };
+    }
+
+    toggleGranularFreeze {
         frozen = frozen.not;
         if(frozen) {
             // Copy current grain buffer to freeze buffer
