@@ -1,7 +1,7 @@
 // Test SynthDef compilation and synth instantiation
 // Uses dummy audio driver for headless testing
 (
-"=== Testing Chroma Synths ===".postln;
+"=== Testing Chroma Effects ===".postln;
 
 // Use dummy audio driver
 Server.default.options.device = "dummy";
@@ -24,6 +24,7 @@ Server.default.waitForBoot({
         Server.default.sync;
         "  - FFT buffer allocated".postln;
         "  - Control buses allocated".postln;
+        "  - Grain buffers allocated".postln;
 
         "Loading SynthDefs...".postln;
         instance.loadSynthDefs;
@@ -52,18 +53,64 @@ Server.default.waitForBoot({
         instance.setBlendMode(\transform);
         ("  - Transform mode: " ++ instance.blendMode).postln;
 
-        "Testing controls...".postln;
-        instance.setDryWet(0.7);
+        "Testing filter controls...".postln;
+        instance.setFilterAmount(0.7);
+        ("  - filterAmount: " ++ instance.filterParams[\amount]).postln;
+
+        instance.setFilterCutoff(3000);
+        ("  - filterCutoff: " ++ instance.filterParams[\cutoff]).postln;
+
+        instance.setFilterResonance(0.5);
+        ("  - filterResonance: " ++ instance.filterParams[\resonance]).postln;
+
+        "Testing granular controls...".postln;
+        instance.setGrainDensity(20);
+        ("  - grainDensity: " ++ instance.granularParams[\density]).postln;
+
+        instance.setGrainSize(0.2);
+        ("  - grainSize: " ++ instance.granularParams[\size]).postln;
+
+        instance.setGrainPitchScatter(0.3);
+        ("  - pitchScatter: " ++ instance.granularParams[\pitchScatter]).postln;
+
+        instance.setGrainPosScatter(0.4);
+        ("  - posScatter: " ++ instance.granularParams[\posScatter]).postln;
+
+        instance.setGranularMix(0.5);
+        ("  - granularMix: " ++ instance.granularParams[\mix]).postln;
+
+        "Testing freeze toggle...".postln;
+        ("  - frozen before: " ++ instance.frozen).postln;
+        instance.toggleFreeze;
+        ("  - frozen after: " ++ instance.frozen).postln;
+        instance.toggleFreeze;
+        ("  - frozen reset: " ++ instance.frozen).postln;
+
+        "Testing reverb/delay controls...".postln;
+        instance.setReverbDelayBlend(0.3);
+        ("  - reverbDelayBlend: " ++ instance.reverbDelayParams[\blend]).postln;
+
+        instance.setDecayTime(5);
+        ("  - decayTime: " ++ instance.reverbDelayParams[\decayTime]).postln;
+
+        instance.setShimmerPitch(7);
+        ("  - shimmerPitch: " ++ instance.reverbDelayParams[\shimmerPitch]).postln;
+
+        instance.setDelayTime(0.5);
+        ("  - delayTime: " ++ instance.reverbDelayParams[\delayTime]).postln;
+
+        instance.setModRate(1.0);
+        ("  - modRate: " ++ instance.reverbDelayParams[\modRate]).postln;
+
+        instance.setModDepth(0.5);
+        ("  - modDepth: " ++ instance.reverbDelayParams[\modDepth]).postln;
+
+        instance.setReverbDelayMix(0.4);
+        ("  - reverbDelayMix: " ++ instance.reverbDelayParams[\mix]).postln;
+
+        "Testing output controls...".postln;
+        instance.setDryWet(0.6);
         ("  - dryWet: " ++ instance.dryWet).postln;
-
-        instance.setDroneLevel(0.5);
-        ("  - droneLevel: " ++ instance.droneLevel).postln;
-
-        instance.setRootNote(48);
-        ("  - rootNote: " ++ instance.config[\rootNote]).postln;
-
-        instance.setLayerAmp(\sub, 0.4);
-        ("  - layerAmps: " ++ instance.layerAmps).postln;
 
         0.5.wait;
 
@@ -73,7 +120,7 @@ Server.default.waitForBoot({
         0.5.wait;
 
         "".postln;
-        "=== ALL SYNTH TESTS PASSED ===".postln;
+        "=== ALL EFFECT TESTS PASSED ===".postln;
         0.exit;
     };
 }, onFailure: {
