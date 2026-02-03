@@ -46,6 +46,28 @@ Chroma.start;  // Launch with default settings
 Chroma.stop;   // Stop and cleanup
 ```
 
+### Terminal UI
+
+```bash
+# Build the TUI (requires Go)
+cd chroma-tui && go build
+
+# Run with defaults (connects to localhost:57120)
+./chroma-tui
+
+# Run with options
+./chroma-tui --host 192.168.1.10 --port 57120 --no-midi
+```
+
+**Keyboard controls:**
+- Tab / ↑↓ : Navigate controls
+- ←→ : Adjust values
+- Enter/Space : Toggle freeze buttons
+- 1-3 : Switch blend modes
+- q : Quit
+
+**MIDI:** Automatically connects to first available MIDI input. Configure mappings in `~/.config/chroma/midi.toml`.
+
 ## Controls
 
 ### Blend Modes

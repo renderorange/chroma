@@ -23,6 +23,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | `docs/plans/2026-02-03-input-freeze-design.md` | Input freeze design |
 | `docs/plans/2026-02-03-tui-design.md` | TUI and MIDI control design |
 | `docs/plans/2026-02-03-tui-implementation.md` | TUI implementation plan |
+| `chroma-tui/` | Go TUI application with MIDI support |
 
 ## Current Status
 
