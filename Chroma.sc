@@ -126,6 +126,7 @@ Chroma {
         this.loadAnalysisSynthDef;
         this.loadBlendControlSynthDef;
         this.loadFilterSynthDef;
+        this.loadGranularSynthDef;
         this.loadOutputSynthDef;
     }
 
@@ -310,6 +311,62 @@ Chroma {
             filtered = (filtered * 0.5).tanh;
 
             Out.ar(outBus, filtered);
+        }).add;
+    }
+
+    loadGranularSynthDef {
+        SynthDef(\chroma_granular, { |inBus, outBus, grainBuf, freezeBuf,
+            ctrlBus, freeze=0, mix=0.3|
+
+            var sig, dry, grains, trig;
+            var density, size, pitchScatter, posScatter;
+            var rate, pos, pan;
+            var bufnum, writePos;
+
+            sig = In.ar(inBus);
+            dry = sig;
+
+            // Read control values
+            #density, size, pitchScatter, posScatter = In.kr(ctrlBus, 4);
+
+            // Continuously record to grain buffer
+            writePos = Phasor.ar(0, 1, 0, BufFrames.kr(grainBuf));
+            BufWr.ar(sig, grainBuf, writePos);
+
+            // Choose buffer based on freeze state
+            bufnum = Select.kr(freeze, [grainBuf, freezeBuf]);
+
+            // Grain trigger
+            trig = Impulse.ar(density);
+
+            // Random grain parameters
+            rate = TRand.kr(1 - pitchScatter, 1 + pitchScatter, trig);
+            pos = TRand.kr(0, posScatter, trig);
+            pan = TRand.kr(-0.5, 0.5, trig);
+
+            // Convert position scatter to buffer position
+            // pos=0 means current position, pos=1 means 2 seconds ago
+            pos = Select.kr(freeze, [
+                // Live: read relative to write position
+                (writePos / BufFrames.kr(grainBuf)) - pos,
+                // Frozen: random position in buffer
+                pos
+            ]).wrap(0, 1);
+
+            grains = GrainBuf.ar(
+                numChannels: 1,
+                trigger: trig,
+                dur: size,
+                sndbuf: bufnum,
+                rate: rate,
+                pos: pos,
+                pan: pan
+            );
+
+            // Mix dry and granular
+            sig = (dry * (1 - mix)) + (grains * mix);
+
+            Out.ar(outBus, sig);
         }).add;
     }
 
