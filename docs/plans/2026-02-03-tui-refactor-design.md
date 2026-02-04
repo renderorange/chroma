@@ -22,7 +22,7 @@ The app will run headless with OSC as the only control interface.
 
 ### TUI Layout
 
-Full terminal width with 5 stacked sections, one control per line:
+Full terminal width with 6 stacked sections, one control per line:
 
 ```
 ┌─────────────────────────── INPUT ───────────────────────────────┐
@@ -35,12 +35,17 @@ Full terminal width with 5 stacked sections, one control per line:
 │ Cutoff       [██████████████────────────────────────────] 2000  │
 │ Resonance    [██████████████────────────────────────────] 0.30  │
 └─────────────────────────────────────────────────────────────────┘
+┌────────────────────────── OVERDRIVE ────────────────────────────┐
+│ Drive        [██████████████████████──────────────────────] 0.50│
+│ Tone         [████████████████████████████────────────────] 0.70│
+│ Mix          [────────────────────────────────────────────] 0.00│
+└─────────────────────────────────────────────────────────────────┘
 ┌────────────────────────── GRANULAR ─────────────────────────────┐
-│ Density      [████────────────────────────────────────────] 10  │
-│ Size         [████────────────────────────────────────────] 0.10│
-│ PitchScat    [██──────────────────────────────────────────] 0.10│
-│ PosScat      [████────────────────────────────────────────] 0.20│
-│ Mix          [██████────────────────────────────────────────] 0.30│
+│ Density      [████────────────────────────────────────────] 20  │
+│ Size         [████────────────────────────────────────────] 0.15│
+│ PitchScat    [████────────────────────────────────────────] 0.20│
+│ PosScat      [██████──────────────────────────────────────] 0.30│
+│ Mix          [██████████████████████──────────────────────] 0.50│
 │ [GRAIN FREEZE]                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ┌───────────────────────── REVERB/DELAY ──────────────────────────┐
@@ -95,8 +100,13 @@ Change from waiting for OSC confirmation to local-first updates:
 No changes to OSC protocol. Existing messages remain:
 
 - `/chroma/sync` - Request state from SC
-- `/chroma/state` - Full state from SC (21 parameters)
+- `/chroma/state` - Full state from SC (24 parameters including overdrive)
 - `/chroma/[param]` - Individual parameter updates to SC
+
+Overdrive OSC messages (already in Chroma.sc):
+- `/chroma/overdriveDrive` - float 0-1
+- `/chroma/overdriveTone` - float 0-1
+- `/chroma/overdriveMix` - float 0-1
 
 ## Future Investigations
 
@@ -110,7 +120,9 @@ No changes to OSC protocol. Existing messages remain:
 
 | File | Changes |
 |------|---------|
-| `Chroma.sc` | Remove GUI code, make headless |
-| `chroma-tui/tui/view.go` | Full-width layout, stacked sections, one control per line |
-| `chroma-tui/tui/model.go` | Track terminal width |
-| `chroma-tui/tui/update.go` | Local-first state updates on key press |
+| `Chroma.sc` | Remove GUI code, make headless (already done) |
+| `chroma-tui/tui/view.go` | Full-width layout, stacked sections, one control per line, add OVERDRIVE section |
+| `chroma-tui/tui/model.go` | Track terminal width, add overdrive state fields and controls |
+| `chroma-tui/tui/update.go` | Local-first state updates on key press, add overdrive key handlers |
+| `chroma-tui/osc/client.go` | Add overdrive convenience methods (SetOverdriveDrive, SetOverdriveTone, SetOverdriveMix) |
+| `chroma-tui/osc/server.go` | Add overdrive fields to State struct, update parsing for 24 parameters |

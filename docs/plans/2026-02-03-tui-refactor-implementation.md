@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Make the TUI the primary interface with full-width layout, stacked sections, and instant responsiveness while removing the SuperCollider GUI.
+**Goal:** Make the TUI the primary interface with full-width layout, stacked sections (including OVERDRIVE), and instant responsiveness while removing the SuperCollider GUI.
 
-**Architecture:** Remove all GUI code from Chroma.sc making it headless. Refactor TUI to use full terminal width with vertically stacked sections (one control per line). Local-first state updates for instant UI feedback.
+**Architecture:** Remove all GUI code from Chroma.sc making it headless (already done). Refactor TUI to use full terminal width with vertically stacked sections (one control per line). Add overdrive controls. Local-first state updates for instant UI feedback.
 
 **Tech Stack:** SuperCollider (Chroma.sc), Go (Bubble Tea, Lipgloss)
 
@@ -12,129 +12,43 @@
 
 ### Task 1: Remove GUI from SuperCollider
 
-**Files:**
-- Modify: `Chroma.sc:9` (remove window var)
-- Modify: `Chroma.sc:96` (remove buildGUI call)
-- Modify: `Chroma.sc:639-884` (delete buildGUI method)
-- Modify: `Chroma.sc:887-900` (delete updateBlendButtons method)
-- Modify: `Chroma.sc:902-912` (update cleanup method)
+**Status:** COMPLETE (commit b2c2fd7)
 
-**Step 1: Remove window instance variable**
-
-In `Chroma.sc`, delete line 9:
-```supercollider
-var <window;
-```
-
-**Step 2: Remove buildGUI call from boot method**
-
-In `Chroma.sc`, change the boot method (lines 89-100) to remove line 96:
-
-Before:
-```supercollider
-boot {
-    server.waitForBoot {
-        this.allocateResources;
-        server.sync;
-        this.loadSynthDefs;
-        server.sync;
-        this.createSynths;
-        this.buildGUI;
-        this.setupOSC;
-        "Chroma ready".postln;
-    };
-}
-```
-
-After:
-```supercollider
-boot {
-    server.waitForBoot {
-        this.allocateResources;
-        server.sync;
-        this.loadSynthDefs;
-        server.sync;
-        this.createSynths;
-        this.setupOSC;
-        "Chroma ready".postln;
-    };
-}
-```
-
-**Step 3: Delete buildGUI method**
-
-Delete the entire `buildGUI` method (lines 639-885).
-
-**Step 4: Delete updateBlendButtons method**
-
-Delete the entire `updateBlendButtons` method (lines 887-900).
-
-**Step 5: Update cleanup method**
-
-Change cleanup method to remove window handling:
-
-Before:
-```supercollider
-cleanup {
-    this.cleanupOSC;
-    synths.do(_.free);
-    buses.do(_.free);
-    fftBuffer.free;
-    grainBuffer.free;
-    freezeBuffer.free;
-    inputFreezeBuffer.free;
-    if(window.notNil) { window.close };
-    "Chroma stopped".postln;
-}
-```
-
-After:
-```supercollider
-cleanup {
-    this.cleanupOSC;
-    synths.do(_.free);
-    buses.do(_.free);
-    fftBuffer.free;
-    grainBuffer.free;
-    freezeBuffer.free;
-    inputFreezeBuffer.free;
-    "Chroma stopped".postln;
-}
-```
-
-**Step 6: Test headless operation**
-
-Run: `./test_integration.sh headless`
-Expected: All tests pass
-
-**Step 7: Commit**
-
-```bash
-git add Chroma.sc
-git commit -m "Remove GUI from Chroma.sc, make app headless"
-```
+The GUI has already been removed from Chroma.sc. The app now runs headless with OSC as the only control interface.
 
 ---
 
-### Task 2: Add terminal width tracking to TUI model
+### Task 2: Add overdrive support to OSC client and server
 
 **Files:**
-- Modify: `chroma-tui/tui/model.go:59-61`
-- Modify: `chroma-tui/tui/update.go:14-23`
+- Modify: `chroma-tui/osc/client.go`
+- Modify: `chroma-tui/osc/server.go`
 
-**Step 1: Add width/height fields to Model**
+**Step 1: Add overdrive methods to client.go**
 
-In `chroma-tui/tui/model.go`, add width and height fields after line 61:
+In `chroma-tui/osc/client.go`, add these convenience methods after the existing ones:
 
 ```go
-type Model struct {
-	// State
+func (c *Client) SetOverdriveDrive(v float32) error { return c.SendFloat("/chroma/overdriveDrive", v) }
+func (c *Client) SetOverdriveTone(v float32) error  { return c.SendFloat("/chroma/overdriveTone", v) }
+func (c *Client) SetOverdriveMix(v float32) error   { return c.SendFloat("/chroma/overdriveMix", v) }
+```
+
+**Step 2: Add overdrive fields to State struct in server.go**
+
+In `chroma-tui/osc/server.go`, update the State struct to include overdrive fields (insert after FilterResonance):
+
+```go
+type State struct {
 	Gain                 float32
 	InputFrozen          bool
 	InputFreezeLength    float32
 	FilterAmount         float32
 	FilterCutoff         float32
 	FilterResonance      float32
+	OverdriveDrive       float32
+	OverdriveTone        float32
+	OverdriveMix         float32
 	GranularDensity      float32
 	GranularSize         float32
 	GranularPitchScatter float32
@@ -150,6 +64,123 @@ type Model struct {
 	ReverbDelayMix       float32
 	BlendMode            int
 	DryWet               float32
+}
+```
+
+**Step 3: Update state parsing in server.go**
+
+Update the `/chroma/state` handler to parse 24 parameters (was 21). The order matches Chroma.sc's sendState method:
+
+```go
+s.server.Handle("/chroma/state", func(msg *osc.Message) {
+	if len(msg.Arguments) >= 24 {
+		state := State{
+			Gain:                 toFloat32(msg.Arguments[0]),
+			InputFrozen:          toInt(msg.Arguments[1]) == 1,
+			InputFreezeLength:    toFloat32(msg.Arguments[2]),
+			FilterAmount:         toFloat32(msg.Arguments[3]),
+			FilterCutoff:         toFloat32(msg.Arguments[4]),
+			FilterResonance:      toFloat32(msg.Arguments[5]),
+			OverdriveDrive:       toFloat32(msg.Arguments[6]),
+			OverdriveTone:        toFloat32(msg.Arguments[7]),
+			OverdriveMix:         toFloat32(msg.Arguments[8]),
+			GranularDensity:      toFloat32(msg.Arguments[9]),
+			GranularSize:         toFloat32(msg.Arguments[10]),
+			GranularPitchScatter: toFloat32(msg.Arguments[11]),
+			GranularPosScatter:   toFloat32(msg.Arguments[12]),
+			GranularMix:          toFloat32(msg.Arguments[13]),
+			GranularFrozen:       toInt(msg.Arguments[14]) == 1,
+			ReverbDelayBlend:     toFloat32(msg.Arguments[15]),
+			DecayTime:            toFloat32(msg.Arguments[16]),
+			ShimmerPitch:         toFloat32(msg.Arguments[17]),
+			DelayTime:            toFloat32(msg.Arguments[18]),
+			ModRate:              toFloat32(msg.Arguments[19]),
+			ModDepth:             toFloat32(msg.Arguments[20]),
+			ReverbDelayMix:       toFloat32(msg.Arguments[21]),
+			BlendMode:            toInt(msg.Arguments[22]),
+			DryWet:               toFloat32(msg.Arguments[23]),
+		}
+		// Non-blocking send
+		select {
+		case s.stateChan <- state:
+		default:
+		}
+	}
+})
+```
+
+**Step 4: Build and run tests**
+
+Run: `cd chroma-tui && go build && go test ./osc/...`
+Expected: Build succeeds, tests pass
+
+**Step 5: Commit**
+
+```bash
+git add chroma-tui/osc/
+git commit -m "Add overdrive support to OSC client and server"
+```
+
+---
+
+### Task 3: Add overdrive to TUI model and update logic
+
+**Files:**
+- Modify: `chroma-tui/tui/model.go`
+- Modify: `chroma-tui/tui/update.go`
+
+**Step 1: Add overdrive controls to control enum in model.go**
+
+Update the control constants to include overdrive (insert after ctrlFilterResonance):
+
+```go
+const (
+	ctrlGain control = iota
+	ctrlInputFreezeLen
+	ctrlInputFreeze
+	ctrlFilterAmount
+	ctrlFilterCutoff
+	ctrlFilterResonance
+	ctrlOverdriveDrive
+	ctrlOverdriveTone
+	ctrlOverdriveMix
+	ctrlGranularDensity
+	ctrlGranularSize
+	ctrlGranularPitchScatter
+	ctrlGranularPosScatter
+	ctrlGranularMix
+	ctrlGranularFreeze
+	ctrlReverbDelayBlend
+	ctrlDecayTime
+	ctrlShimmerPitch
+	ctrlDelayTime
+	ctrlModRate
+	ctrlModDepth
+	ctrlReverbDelayMix
+	ctrlBlendMode
+	ctrlDryWet
+	ctrlCount
+)
+```
+
+**Step 2: Add overdrive state fields to Model struct**
+
+Add overdrive fields after FilterResonance:
+
+```go
+type Model struct {
+	// State
+	Gain                 float32
+	InputFrozen          bool
+	InputFreezeLength    float32
+	FilterAmount         float32
+	FilterCutoff         float32
+	FilterResonance      float32
+	OverdriveDrive       float32
+	OverdriveTone        float32
+	OverdriveMix         float32
+	GranularDensity      float32
+	// ... rest of fields
 
 	// UI state
 	focused   control
@@ -163,9 +194,41 @@ type Model struct {
 }
 ```
 
-**Step 2: Handle WindowSizeMsg in Update**
+**Step 3: Update NewModel with overdrive defaults**
 
-In `chroma-tui/tui/update.go`, add a case for `tea.WindowSizeMsg` in the Update function:
+Add defaults matching Chroma.sc:
+
+```go
+func NewModel(client *osc.Client) Model {
+	return Model{
+		// ... existing fields
+		FilterResonance:      0.3,
+		OverdriveDrive:       0.5,
+		OverdriveTone:        0.7,
+		OverdriveMix:         0.0,
+		GranularDensity:      20,
+		// ... rest
+	}
+}
+```
+
+**Step 4: Update ApplyState to include overdrive**
+
+```go
+func (m *Model) ApplyState(s osc.State) {
+	// ... existing fields
+	m.FilterResonance = s.FilterResonance
+	m.OverdriveDrive = s.OverdriveDrive
+	m.OverdriveTone = s.OverdriveTone
+	m.OverdriveMix = s.OverdriveMix
+	m.GranularDensity = s.GranularDensity
+	// ... rest
+}
+```
+
+**Step 5: Add WindowSizeMsg handler and overdrive cases to update.go**
+
+Add WindowSizeMsg case in Update:
 
 ```go
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -184,28 +247,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 ```
 
-**Step 3: Build and verify compilation**
+**Step 6: Add overdrive cases to adjustFocused**
+
+In the `adjustFocused` method, add cases for overdrive controls:
+
+```go
+case ctrlOverdriveDrive:
+	m.OverdriveDrive = clamp(m.OverdriveDrive+delta, 0, 1)
+	m.client.SetOverdriveDrive(m.OverdriveDrive)
+case ctrlOverdriveTone:
+	m.OverdriveTone = clamp(m.OverdriveTone+delta, 0, 1)
+	m.client.SetOverdriveTone(m.OverdriveTone)
+case ctrlOverdriveMix:
+	m.OverdriveMix = clamp(m.OverdriveMix+delta, 0, 1)
+	m.client.SetOverdriveMix(m.OverdriveMix)
+```
+
+**Step 7: Build and verify**
 
 Run: `cd chroma-tui && go build`
 Expected: Compiles without errors
 
-**Step 4: Commit**
+**Step 8: Commit**
 
 ```bash
 git add chroma-tui/tui/model.go chroma-tui/tui/update.go
-git commit -m "Add terminal width/height tracking to TUI model"
+git commit -m "Add overdrive controls and terminal size tracking to TUI model"
 ```
 
 ---
 
-### Task 3: Refactor view.go for full-width stacked layout
+### Task 4: Refactor view.go for full-width stacked layout with overdrive
 
 **Files:**
 - Modify: `chroma-tui/tui/view.go`
 
-**Step 1: Update boxStyle to accept width**
+**Step 1: Replace view.go with full-width stacked layout**
 
-Replace the entire `chroma-tui/tui/view.go` file with the new full-width layout:
+Replace the entire `chroma-tui/tui/view.go` file:
 
 ```go
 package tui
@@ -223,10 +302,6 @@ const (
 )
 
 var (
-	titleStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205"))
-
 	sectionTitleStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("69"))
@@ -264,6 +339,7 @@ func (m Model) View() string {
 
 	sections = append(sections, m.renderSection("INPUT", width, m.renderInputControls))
 	sections = append(sections, m.renderSection("FILTER", width, m.renderFilterControls))
+	sections = append(sections, m.renderSection("OVERDRIVE", width, m.renderOverdriveControls))
 	sections = append(sections, m.renderSection("GRANULAR", width, m.renderGranularControls))
 	sections = append(sections, m.renderSection("REVERB/DELAY", width, m.renderReverbDelayControls))
 	sections = append(sections, m.renderSection("GLOBAL", width, m.renderGlobalControls))
@@ -289,7 +365,7 @@ func (m Model) View() string {
 func (m Model) renderSection(title string, width int, renderControls func(int) []string) string {
 	innerWidth := width - 4 // Account for border padding
 
-	// Section title centered
+	// Section title
 	titleLine := sectionTitleStyle.Render(fmt.Sprintf("─── %s ───", title))
 
 	// Get control lines
@@ -322,6 +398,14 @@ func (m Model) renderFilterControls(width int) []string {
 		m.renderSlider("Amount", m.FilterAmount, 0, 1, width, ctrlFilterAmount),
 		m.renderSlider("Cutoff", m.FilterCutoff, 200, 8000, width, ctrlFilterCutoff),
 		m.renderSlider("Resonance", m.FilterResonance, 0, 1, width, ctrlFilterResonance),
+	}
+}
+
+func (m Model) renderOverdriveControls(width int) []string {
+	return []string{
+		m.renderSlider("Drive", m.OverdriveDrive, 0, 1, width, ctrlOverdriveDrive),
+		m.renderSlider("Tone", m.OverdriveTone, 0, 1, width, ctrlOverdriveTone),
+		m.renderSlider("Mix", m.OverdriveMix, 0, 1, width, ctrlOverdriveMix),
 	}
 }
 
@@ -431,18 +515,18 @@ Expected: Compiles without errors
 **Step 3: Test TUI visually**
 
 Run: `cd chroma-tui && ./chroma-tui --no-midi`
-Expected: TUI displays with full-width stacked sections, resize terminal to verify responsive width
+Expected: TUI displays with full-width stacked sections including OVERDRIVE, resize terminal to verify responsive width
 
 **Step 4: Commit**
 
 ```bash
 git add chroma-tui/tui/view.go
-git commit -m "Refactor TUI for full-width stacked layout with one control per line"
+git commit -m "Refactor TUI for full-width stacked layout with overdrive section"
 ```
 
 ---
 
-### Task 4: Update documentation
+### Task 5: Update documentation
 
 **Files:**
 - Modify: `README.md`
@@ -450,26 +534,78 @@ git commit -m "Refactor TUI for full-width stacked layout with one control per l
 
 **Step 1: Update README.md**
 
-Add note that the TUI is the primary interface and the SuperCollider app runs headless.
-
-In the Quick Start section, update to clarify:
+Ensure documentation reflects:
 - SuperCollider runs headless (no GUI window)
 - Use chroma-tui for the interface
+- Overdrive controls are available
 
 **Step 2: Update CLAUDE.md**
 
-Update the Current Status section to reflect completed TUI refactor.
+Update the Current Status section to reflect completed TUI refactor with overdrive.
 
 **Step 3: Commit**
 
 ```bash
 git add README.md CLAUDE.md
-git commit -m "Update documentation for headless operation and TUI as primary interface"
+git commit -m "Update documentation for TUI refactor with overdrive"
 ```
 
 ---
 
-### Task 5: Run full integration test
+### Task 6: Ensure jackd cleanup on exit
+
+**Files:**
+- Modify: `run.sh`
+
+**Problem:** Currently `run.sh` only cleans up jackd if sclang exits normally. If interrupted with Ctrl+C or killed, jackd continues running.
+
+**Step 1: Add signal trap to run.sh**
+
+Add a cleanup function and trap after the JACK_PID assignment (after line 85):
+
+```bash
+# Cleanup function
+cleanup() {
+    echo ""
+    echo "Stopping JACK..."
+    kill $JACK_PID 2>/dev/null
+    wait $JACK_PID 2>/dev/null
+    exit 0
+}
+
+# Trap signals for cleanup
+trap cleanup SIGINT SIGTERM EXIT
+```
+
+**Step 2: Remove redundant cleanup line**
+
+Remove the existing line 98:
+```bash
+kill $JACK_PID 2>/dev/null
+```
+
+Since the trap now handles cleanup on EXIT, this is no longer needed.
+
+**Step 3: Test signal handling**
+
+Run: `./run.sh`
+Then press Ctrl+C
+Expected: "Stopping JACK..." message appears and jackd process is terminated
+
+Verify no orphan jackd:
+Run: `pgrep jackd`
+Expected: No output (no jackd processes running)
+
+**Step 4: Commit**
+
+```bash
+git add run.sh
+git commit -m "Add signal trap to ensure jackd cleanup on exit"
+```
+
+---
+
+### Task 7: Run full integration test
 
 **Files:**
 - None (verification only)
@@ -485,9 +621,11 @@ Expected: All tests pass
 
 **Step 3: Manual verification**
 
-1. Start SuperCollider: `sclang -e "Chroma.start"`
+1. Start SuperCollider: `./run.sh` or `sclang -e "Chroma.start"`
 2. Verify no GUI window appears
 3. In another terminal: `cd chroma-tui && ./chroma-tui`
-4. Verify TUI displays full-width
-5. Test navigation and adjustments
-6. Verify instant responsiveness (no lag on key press)
+4. Verify TUI displays full-width with 6 sections (INPUT, FILTER, OVERDRIVE, GRANULAR, REVERB/DELAY, GLOBAL)
+5. Test navigation through all controls including overdrive
+6. Test overdrive adjustments affect sound
+7. Verify instant responsiveness (no lag on key press)
+8. Press Ctrl+C in the run.sh terminal - verify jackd is stopped
