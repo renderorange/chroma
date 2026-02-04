@@ -21,14 +21,14 @@ var (
 		Foreground(lipgloss.Color("205"))
 
 	normalStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252"))
+		Foreground(lipgloss.Color("249"))
 
 	activeButtonStyle = lipgloss.NewStyle().
 		Background(lipgloss.Color("205")).
 		Foreground(lipgloss.Color("255"))
 
 	inactiveButtonStyle = lipgloss.NewStyle().
-		Background(lipgloss.Color("240")).
+		Background(lipgloss.Color("244")).
 		Foreground(lipgloss.Color("255"))
 
 	selectedModeStyle = lipgloss.NewStyle().
@@ -36,7 +36,7 @@ var (
 		Foreground(lipgloss.Color("255"))
 
 	unselectedModeStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240"))
+		Foreground(lipgloss.Color("244"))
 )
 
 func (m Model) View() string {
