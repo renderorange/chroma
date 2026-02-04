@@ -15,7 +15,7 @@ const (
 var (
 	sectionTitleStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("69"))
+		Foreground(lipgloss.Color("205"))
 
 	focusedStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("205"))
@@ -24,7 +24,7 @@ var (
 		Foreground(lipgloss.Color("252"))
 
 	activeButtonStyle = lipgloss.NewStyle().
-		Background(lipgloss.Color("196")).
+		Background(lipgloss.Color("205")).
 		Foreground(lipgloss.Color("255"))
 
 	inactiveButtonStyle = lipgloss.NewStyle().
@@ -32,7 +32,7 @@ var (
 		Foreground(lipgloss.Color("255"))
 
 	selectedModeStyle = lipgloss.NewStyle().
-		Background(lipgloss.Color("69")).
+		Background(lipgloss.Color("205")).
 		Foreground(lipgloss.Color("255"))
 
 	unselectedModeStyle = lipgloss.NewStyle().
