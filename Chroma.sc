@@ -6,7 +6,6 @@ Chroma {
     var <fftBuffer;
     var <buses;
     var <synths;
-    var <window;
     var <blendMode;
     var <dryWet;
     var <grainBuffer;
@@ -93,7 +92,7 @@ Chroma {
             this.loadSynthDefs;
             server.sync;
             this.createSynths;
-            this.buildGUI;
+            this.setupOSC;
             "Chroma ready".postln;
         };
     }
@@ -635,6 +634,7 @@ Chroma {
         synths[\granular].map(\ctrlBus, buses[\granularCtrl]);
     }
 
+<<<<<<< HEAD
     buildGUI {
         var width = 650, height = 580;
         var spectrumView, updateRoutine;
@@ -898,6 +898,8 @@ Chroma {
         };
     }
 
+=======
+>>>>>>> 3fc2606 (Remove GUI, make SuperCollider engine headless-only)
     cleanup {
         synths.do(_.free);
         buses.do(_.free);
@@ -905,7 +907,6 @@ Chroma {
         grainBuffer.free;
         freezeBuffer.free;
         inputFreezeBuffer.free;
-        if(window.notNil) { window.close };
         "Chroma stopped".postln;
     }
 
