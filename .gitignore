@@ -1,6 +1,7 @@
 chroma-tui/chroma-tui
 *.exe
 tmp/
+.worktrees/
 
 # vim stuff
 # Swap
