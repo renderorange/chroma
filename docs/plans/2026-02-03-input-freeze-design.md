@@ -1,5 +1,7 @@
 # Input Freeze Design
 
+**Status:** IMPLEMENTED (2026-02-03)
+
 ## Overview
 
 Add a sustained tone freeze at the input stage, separate from the existing granular freeze. Captures and loops a short segment of audio with adjustable loop length.

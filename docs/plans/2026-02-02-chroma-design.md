@@ -1,5 +1,7 @@
 # Chroma: Spectral-Reactive Drone Synthesizer
 
+**Status:** SUPERSEDED by chroma-effects-design.md (redesigned as effects processor)
+
 ## Overview
 
 Chroma is a real-time audio processing application built in SuperCollider. It analyzes the spectral content of incoming audio and uses that analysis to shape evolving drone and pad textures. Multiple "blend modes" define different relationships between input spectrum and output sound.

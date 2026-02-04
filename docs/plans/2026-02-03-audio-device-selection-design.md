@@ -1,5 +1,7 @@
 # Audio Device Selection Design
 
+**Status:** IMPLEMENTED (2026-02-03)
+
 ## Problem
 
 Chroma currently uses JACK which defaults to the built-in audio device (hw:0). Users need to select their preferred audio device (e.g., USB audio interface) without hardcoding device names.

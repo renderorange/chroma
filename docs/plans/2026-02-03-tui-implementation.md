@@ -1,6 +1,6 @@
 # Chroma TUI Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status: COMPLETE** - All tasks implemented (2026-02-03). See tui-refactor-implementation.md for subsequent enhancements.
 
 **Goal:** Build a terminal UI for Chroma in Go with bubbletea, communicating via OSC and supporting MIDI control.
 

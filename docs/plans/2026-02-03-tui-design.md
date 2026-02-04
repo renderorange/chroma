@@ -1,5 +1,7 @@
 # Chroma TUI Design
 
+**Status:** IMPLEMENTED (2026-02-03). See tui-refactor-design.md for subsequent enhancements.
+
 ## Overview
 
 A terminal user interface for Chroma, built in Go with bubbletea. Communicates with SuperCollider via OSC. Includes built-in MIDI support for hardware/DAW control.

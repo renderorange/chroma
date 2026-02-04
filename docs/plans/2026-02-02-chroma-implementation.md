@@ -1,6 +1,6 @@
 # Chroma Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status:** SUPERSEDED by chroma-effects-implementation.md (redesigned as effects processor)
 
 **Goal:** Build a spectral-reactive drone synthesizer that analyzes input audio and shapes drone textures with three blend modes.
 
