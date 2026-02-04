@@ -13,6 +13,10 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	case StateMsg:
@@ -70,6 +74,15 @@ func (m *Model) adjustFocused(delta float32) {
 	case ctrlFilterResonance:
 		m.FilterResonance = clamp(m.FilterResonance+delta, 0, 1)
 		m.client.SetFilterResonance(m.FilterResonance)
+	case ctrlOverdriveDrive:
+		m.OverdriveDrive = clamp(m.OverdriveDrive+delta, 0, 1)
+		m.client.SetOverdriveDrive(m.OverdriveDrive)
+	case ctrlOverdriveTone:
+		m.OverdriveTone = clamp(m.OverdriveTone+delta, 0, 1)
+		m.client.SetOverdriveTone(m.OverdriveTone)
+	case ctrlOverdriveMix:
+		m.OverdriveMix = clamp(m.OverdriveMix+delta, 0, 1)
+		m.client.SetOverdriveMix(m.OverdriveMix)
 	case ctrlGranularDensity:
 		m.GranularDensity = clamp(m.GranularDensity+delta*49, 1, 50)
 		m.client.SetGranularDensity(m.GranularDensity)

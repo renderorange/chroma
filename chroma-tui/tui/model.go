@@ -13,6 +13,9 @@ const (
 	ctrlFilterAmount
 	ctrlFilterCutoff
 	ctrlFilterResonance
+	ctrlOverdriveDrive
+	ctrlOverdriveTone
+	ctrlOverdriveMix
 	ctrlGranularDensity
 	ctrlGranularSize
 	ctrlGranularPitchScatter
@@ -39,6 +42,9 @@ type Model struct {
 	FilterAmount         float32
 	FilterCutoff         float32
 	FilterResonance      float32
+	OverdriveDrive       float32
+	OverdriveTone        float32
+	OverdriveMix         float32
 	GranularDensity      float32
 	GranularSize         float32
 	GranularPitchScatter float32
@@ -59,6 +65,8 @@ type Model struct {
 	focused   control
 	connected bool
 	midiPort  string
+	width     int
+	height    int
 
 	// OSC
 	client *osc.Client
@@ -72,6 +80,9 @@ func NewModel(client *osc.Client) Model {
 		FilterAmount:         0.5,
 		FilterCutoff:         2000,
 		FilterResonance:      0.3,
+		OverdriveDrive:       0.5,
+		OverdriveTone:        0.7,
+		OverdriveMix:         0.0,
 		GranularDensity:      20,
 		GranularSize:         0.15,
 		GranularPitchScatter: 0.2,
@@ -99,6 +110,9 @@ func (m *Model) ApplyState(s osc.State) {
 	m.FilterAmount = s.FilterAmount
 	m.FilterCutoff = s.FilterCutoff
 	m.FilterResonance = s.FilterResonance
+	m.OverdriveDrive = s.OverdriveDrive
+	m.OverdriveTone = s.OverdriveTone
+	m.OverdriveMix = s.OverdriveMix
 	m.GranularDensity = s.GranularDensity
 	m.GranularSize = s.GranularSize
 	m.GranularPitchScatter = s.GranularPitchScatter
