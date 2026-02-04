@@ -57,8 +57,9 @@ func (m Model) View() string {
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
-	// Status bar
-	status := "\nStatus: "
+	// Status bar (with left margin to align with box content)
+	margin := "  "
+	status := "\n" + margin + "Status: "
 	if m.connected {
 		status += "Connected"
 	} else {
@@ -68,7 +69,7 @@ func (m Model) View() string {
 		status += " │ MIDI: " + m.midiPort
 	}
 	status += "\n"
-	status += "Tab/↑↓: Navigate │ ←→: Adjust │ Enter: Toggle │ 1-3: Mode │ q: Quit"
+	status += margin + "Tab/↑↓: Navigate │ ←→: Adjust │ Enter: Toggle │ 1-3: Mode │ q: Quit"
 
 	return content + status
 }
