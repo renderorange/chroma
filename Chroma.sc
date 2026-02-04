@@ -16,6 +16,7 @@ Chroma {
     var <inputFrozen;
     var <inputFreezeLength;
     var <filterParams;
+    var <overdriveParams;
     var <granularParams;
     var <reverbDelayParams;
     var <inputGain;
@@ -46,12 +47,17 @@ Chroma {
             cutoff: 2000,
             resonance: 0.3
         );
+        overdriveParams = (
+            drive: 0.5,
+            tone: 0.7,
+            mix: 0.0
+        );
         granularParams = (
-            density: 10,
-            size: 0.1,
-            pitchScatter: 0.1,
-            posScatter: 0.2,
-            mix: 0.3
+            density: 20,
+            size: 0.15,
+            pitchScatter: 0.2,
+            posScatter: 0.3,
+            mix: 0.5
         );
         reverbDelayParams = (
             blend: 0.5,
@@ -115,12 +121,14 @@ Chroma {
 
         // Effect audio buses
         buses[\filteredAudio] = Bus.audio(server, 1);
+        buses[\overdriveAudio] = Bus.audio(server, 1);
         buses[\granularAudio] = Bus.audio(server, 1);
         buses[\reverbAudio] = Bus.audio(server, 1);
         buses[\delayAudio] = Bus.audio(server, 1);
 
         // Effect control buses
         buses[\filterGains] = Bus.control(server, 8);
+        buses[\overdriveCtrl] = Bus.control(server, 2);  // drive, tone
         buses[\granularCtrl] = Bus.control(server, 4);  // density, size, pitchScatter, posScatter
         buses[\reverbDelayCtrl] = Bus.control(server, 4);  // blend, decay, modRate, modDepth
 
@@ -141,6 +149,7 @@ Chroma {
         this.loadAnalysisSynthDef;
         this.loadBlendControlSynthDef;
         this.loadFilterSynthDef;
+        this.loadOverdriveSynthDef;
         this.loadGranularSynthDef;
         this.loadShimmerReverbSynthDef;
         this.loadModDelaySynthDef;
@@ -239,13 +248,15 @@ Chroma {
 
     loadBlendControlSynthDef {
         SynthDef(\chroma_blend, { |mode=0, bandsBus, centroidBus, spreadBus, flatnessBus,
-            filterGainsBus, granularCtrlBus, reverbDelayCtrlBus,
-            baseFilterAmount=0.5, baseGrainDensity=10, baseGrainSize=0.1,
+            filterGainsBus, overdriveCtrlBus, granularCtrlBus, reverbDelayCtrlBus,
+            baseFilterAmount=0.5, baseOverdriveDrive=0.5, baseOverdriveTone=0.7,
+            baseGrainDensity=10, baseGrainSize=0.1,
             basePitchScatter=0.1, basePosScatter=0.2,
             baseReverbDelayBlend=0.5, baseDecayTime=3, baseModRate=0.5, baseModDepth=0.3|
 
             var bands, centroid, spread, flatness;
-            var filterGains, grainDensity, grainSize, pitchScatter, posScatter;
+            var filterGains, overdriveDrive, overdriveTone;
+            var grainDensity, grainSize, pitchScatter, posScatter;
             var reverbDelayBlend, decayTime, modRate, modDepth;
 
             bands = In.kr(bandsBus, 8);
@@ -261,6 +272,25 @@ Chroma {
                 bands.linlin(0, 1, 1.5, 0.5),
                 // Transform: centroid shifts all gains
                 bands * centroid.linlin(0, 1, 0.7, 1.3)
+            ]);
+
+            // Overdrive modulation: drive reacts to spectral energy, tone to centroid
+            overdriveDrive = Select.kr(mode, [
+                // Mirror: bright input = more drive
+                centroid.linlin(0, 1, baseOverdriveDrive * 0.5, baseOverdriveDrive * 1.5),
+                // Complement: dark input = more drive
+                (1 - centroid).linlin(0, 1, baseOverdriveDrive * 0.5, baseOverdriveDrive * 1.5),
+                // Transform: flatness affects drive
+                flatness.linlin(0, 1, baseOverdriveDrive * 0.3, baseOverdriveDrive * 1.8)
+            ]);
+
+            overdriveTone = Select.kr(mode, [
+                // Mirror: bright input = brighter tone
+                centroid.linlin(0, 1, baseOverdriveTone * 0.8, baseOverdriveTone * 1.2),
+                // Complement: dark input = brighter tone
+                (1 - centroid).linlin(0, 1, baseOverdriveTone * 0.8, baseOverdriveTone * 1.2),
+                // Transform: spread affects tone
+                spread.linlin(0, 1, baseOverdriveTone * 0.7, baseOverdriveTone * 1.3)
             ]);
 
             // Granular parameters
@@ -332,6 +362,7 @@ Chroma {
             ]);
 
             Out.kr(filterGainsBus, filterGains.lag(0.1));
+            Out.kr(overdriveCtrlBus, [overdriveDrive, overdriveTone].clip(0, 1).lag(0.1));
             Out.kr(granularCtrlBus, [grainDensity, grainSize, pitchScatter, posScatter].lag(0.1));
             Out.kr(reverbDelayCtrlBus, [reverbDelayBlend, decayTime, modRate, modDepth].lag(0.1));
         }).add;
@@ -364,6 +395,40 @@ Chroma {
             filtered = (filtered * 0.5).tanh;
 
             Out.ar(outBus, filtered);
+        }).add;
+    }
+
+    loadOverdriveSynthDef {
+        SynthDef(\chroma_overdrive, { |inBus, outBus, ctrlBus, drive=0.5, tone=0.7, mix=0.0|
+            var sig, dry, wet, ctrl, modDrive, modTone;
+            var preGain, postGain, cutoff;
+
+            sig = In.ar(inBus);
+            dry = sig;
+
+            // Read modulated values from control bus
+            ctrl = In.kr(ctrlBus, 2);
+            modDrive = ctrl[0].lag(0.05);
+            modTone = ctrl[1].lag(0.05);
+
+            // Pre-gain based on drive (1x to 20x)
+            preGain = modDrive.linexp(0, 1, 1, 20);
+
+            // Soft clip with tanh
+            wet = (sig * preGain).tanh;
+
+            // Compensate output level
+            postGain = modDrive.linlin(0, 1, 1, 0.5);
+            wet = wet * postGain;
+
+            // Tone control: lowpass filter (500Hz to 12kHz)
+            cutoff = modTone.linexp(0, 1, 500, 12000);
+            wet = LPF.ar(wet, cutoff);
+
+            // Dry/wet mix
+            sig = XFade2.ar(dry, wet, mix.linlin(0, 1, -1, 1));
+
+            Out.ar(outBus, sig);
         }).add;
     }
 
@@ -568,9 +633,12 @@ Chroma {
             \spreadBus, buses[\spread],
             \flatnessBus, buses[\flatness],
             \filterGainsBus, buses[\filterGains],
+            \overdriveCtrlBus, buses[\overdriveCtrl],
             \granularCtrlBus, buses[\granularCtrl],
             \reverbDelayCtrlBus, buses[\reverbDelayCtrl],
             \baseFilterAmount, filterParams[\amount],
+            \baseOverdriveDrive, overdriveParams[\drive],
+            \baseOverdriveTone, overdriveParams[\tone],
             \baseGrainDensity, granularParams[\density],
             \baseGrainSize, granularParams[\size],
             \basePitchScatter, granularParams[\pitchScatter],
@@ -591,29 +659,39 @@ Chroma {
             \resonance, filterParams[\resonance]
         ], synths[\blend], \addAfter);
 
-        // Granular (reads from filtered audio)
-        synths[\granular] = Synth(\chroma_granular, [
+        // Overdrive (reads from filtered audio)
+        synths[\overdrive] = Synth(\chroma_overdrive, [
             \inBus, buses[\filteredAudio],
+            \outBus, buses[\overdriveAudio],
+            \ctrlBus, buses[\overdriveCtrl],
+            \drive, overdriveParams[\drive],
+            \tone, overdriveParams[\tone],
+            \mix, overdriveParams[\mix]
+        ], synths[\filter], \addAfter);
+
+        // Granular (reads from overdrive audio)
+        synths[\granular] = Synth(\chroma_granular, [
+            \inBus, buses[\overdriveAudio],
             \outBus, buses[\granularAudio],
             \grainBuf, grainBuffer,
             \freezeBuf, freezeBuffer,
             \ctrlBus, buses[\granularCtrl],
             \freeze, frozen.asInteger,
             \mix, granularParams[\mix]
-        ], synths[\filter], \addAfter);
+        ], synths[\overdrive], \addAfter);
 
-        // Shimmer reverb (reads from filtered audio)
+        // Shimmer reverb (reads from overdrive audio)
         synths[\shimmerReverb] = Synth(\chroma_shimmer_reverb, [
-            \inBus, buses[\filteredAudio],
+            \inBus, buses[\overdriveAudio],
             \outBus, buses[\reverbAudio],
             \decayTime, reverbDelayParams[\decayTime],
             \shimmerPitch, reverbDelayParams[\shimmerPitch],
             \mix, reverbDelayParams[\mix]
         ], synths[\granular], \addAfter);
 
-        // Modulated delay (reads from filtered audio)
+        // Modulated delay (reads from overdrive audio)
         synths[\modDelay] = Synth(\chroma_mod_delay, [
-            \inBus, buses[\filteredAudio],
+            \inBus, buses[\overdriveAudio],
             \outBus, buses[\delayAudio],
             \delayTime, reverbDelayParams[\delayTime],
             \decayTime, reverbDelayParams[\decayTime],
@@ -624,7 +702,7 @@ Chroma {
 
         // Output mixer (at tail)
         synths[\output] = Synth(\chroma_output, [
-            \inBus, buses[\filteredAudio],
+            \inBus, buses[\overdriveAudio],
             \granularBus, buses[\granularAudio],
             \reverbBus, buses[\reverbAudio],
             \delayBus, buses[\delayAudio],
@@ -637,7 +715,7 @@ Chroma {
     }
 
     buildGUI {
-        var width = 650, height = 580;
+        var width = 650, height = 720;
         var spectrumView, updateRoutine;
         var bandData;
 
@@ -753,11 +831,35 @@ Chroma {
 
         window.view.decorator.nextLine;
 
-        // Granular and Reverb/Delay sections
+        // Overdrive and Granular sections
+        StaticText(window, 300@20).string_("OVERDRIVE").font_(Font("Helvetica", 12, true));
         StaticText(window, 300@20).string_("GRANULAR").font_(Font("Helvetica", 12, true));
-        StaticText(window, 300@20).string_("REVERB / DELAY").font_(Font("Helvetica", 12, true));
 
         window.view.decorator.nextLine;
+
+        // Overdrive controls
+        View(window, 300@90).layout_(
+            VLayout(
+                HLayout(
+                    StaticText().string_("Drive").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(overdriveParams[\drive]).action_({ |sl|
+                        this.setOverdriveDrive(sl.value);
+                    })
+                ),
+                HLayout(
+                    StaticText().string_("Tone").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(overdriveParams[\tone]).action_({ |sl|
+                        this.setOverdriveTone(sl.value);
+                    })
+                ),
+                HLayout(
+                    StaticText().string_("Mix").fixedWidth_(60),
+                    Slider().orientation_(\horizontal).value_(overdriveParams[\mix]).action_({ |sl|
+                        this.setOverdriveMix(sl.value);
+                    })
+                )
+            ).margins_(5).spacing_(2)
+        );
 
         // Granular controls
         View(window, 300@180).layout_(
@@ -801,6 +903,13 @@ Chroma {
                 })
             ).margins_(5).spacing_(2)
         );
+
+        window.view.decorator.nextLine;
+
+        // Reverb/Delay section
+        StaticText(window, 300@20).string_("REVERB / DELAY").font_(Font("Helvetica", 12, true));
+
+        window.view.decorator.nextLine;
 
         // Reverb/Delay controls
         View(window, 300@180).layout_(
@@ -926,6 +1035,11 @@ Chroma {
         OSCdef(\chromaFilterCutoff, { |msg| this.setFilterCutoff(msg[1]) }, '/chroma/filterCutoff');
         OSCdef(\chromaFilterResonance, { |msg| this.setFilterResonance(msg[1]) }, '/chroma/filterResonance');
 
+        // Overdrive controls
+        OSCdef(\chromaOverdriveDrive, { |msg| this.setOverdriveDrive(msg[1]) }, '/chroma/overdriveDrive');
+        OSCdef(\chromaOverdriveTone, { |msg| this.setOverdriveTone(msg[1]) }, '/chroma/overdriveTone');
+        OSCdef(\chromaOverdriveMix, { |msg| this.setOverdriveMix(msg[1]) }, '/chroma/overdriveMix');
+
         // Granular controls
         OSCdef(\chromaGranularDensity, { |msg| this.setGrainDensity(msg[1]) }, '/chroma/granularDensity');
         OSCdef(\chromaGranularSize, { |msg| this.setGrainSize(msg[1]) }, '/chroma/granularSize');
@@ -968,6 +1082,9 @@ Chroma {
             filterParams[\amount],
             filterParams[\cutoff],
             filterParams[\resonance],
+            overdriveParams[\drive],
+            overdriveParams[\tone],
+            overdriveParams[\mix],
             granularParams[\density],
             granularParams[\size],
             granularParams[\pitchScatter],
@@ -993,6 +1110,9 @@ Chroma {
         OSCdef(\chromaFilterAmount).free;
         OSCdef(\chromaFilterCutoff).free;
         OSCdef(\chromaFilterResonance).free;
+        OSCdef(\chromaOverdriveDrive).free;
+        OSCdef(\chromaOverdriveTone).free;
+        OSCdef(\chromaOverdriveMix).free;
         OSCdef(\chromaGranularDensity).free;
         OSCdef(\chromaGranularSize).free;
         OSCdef(\chromaGranularPitchScatter).free;
@@ -1075,6 +1195,23 @@ Chroma {
     setFilterResonance { |val|
         filterParams[\resonance] = val.clip(0, 1);
         if(synths[\filter].notNil) { synths[\filter].set(\resonance, val) };
+    }
+
+    setOverdriveDrive { |val|
+        overdriveParams[\drive] = val.clip(0, 1);
+        if(synths[\overdrive].notNil) { synths[\overdrive].set(\drive, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseOverdriveDrive, val) };
+    }
+
+    setOverdriveTone { |val|
+        overdriveParams[\tone] = val.clip(0, 1);
+        if(synths[\overdrive].notNil) { synths[\overdrive].set(\tone, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseOverdriveTone, val) };
+    }
+
+    setOverdriveMix { |val|
+        overdriveParams[\mix] = val.clip(0, 1);
+        if(synths[\overdrive].notNil) { synths[\overdrive].set(\mix, val) };
     }
 
     setGrainDensity { |val|

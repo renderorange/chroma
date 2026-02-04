@@ -4,13 +4,13 @@
 
 ## Project: Chroma
 
-Spectral-reactive effects processor in SuperCollider. Analyzes input audio spectrum and uses it to shape spectral filtering, granular processing, shimmer reverb, and modulated delay effects with switchable blend modes (Mirror, Complement, Transform).
+Spectral-reactive effects processor in SuperCollider. Analyzes input audio spectrum and uses it to shape spectral filtering, overdrive, granular processing, shimmer reverb, and modulated delay effects with switchable blend modes (Mirror, Complement, Transform).
 
 ## Project Files
 
 | File | Description |
 |------|-------------|
-| `Chroma.sc` | Main class (~525 lines) |
+| `Chroma.sc` | Main class (~1280 lines) |
 | `run.sh` | Launcher with audio device selection |
 | `startup.scd` | Boot script with server options |
 | `run_gui.scd` | Simple GUI launcher |
@@ -44,6 +44,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | 11 | Update tests | Complete |
 | 12 | Update documentation | Complete |
 | 13 | Integration testing | Complete |
+| 14 | Overdrive effect | Complete |
 
 ## Running Tests
 

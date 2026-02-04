@@ -9,6 +9,7 @@ Chroma analyzes the spectral content of incoming audio and uses that analysis to
 ## Effects
 
 - **Spectral Filter**: Multi-band filter with spectrum-driven gain per band
+- **Overdrive**: Soft-clip saturation with tone control
 - **Granular Processor**: Granular synthesis with freeze capability
 - **Shimmer Reverb**: Pitch-shifted reverb for ethereal textures
 - **Modulated Delay**: Chorus-style delay with LFO modulation
@@ -89,6 +90,9 @@ cd chroma-tui && go build
 | Smoothing | 0.01-0.5s | Analysis response time |
 | Dry/Wet | 0-1 | Balance between dry input and processed signal |
 | Filter Amount | 0-1 | Spectral filter intensity |
+| Overdrive Drive | 0-1 | Saturation amount |
+| Overdrive Tone | 0-1 | Post-drive brightness (dark to bright) |
+| Overdrive Mix | 0-1 | Dry/wet blend for overdrive |
 | Granular Mix | 0-1 | Granular effect level |
 | Grain Freeze | on/off | Freeze granular buffer for textural grains |
 | Reverb Mix | 0-1 | Shimmer reverb level |
@@ -109,12 +113,13 @@ Chroma.instance.setDryWet(0.7);
 Audio Input -> Input Freeze -> FFT Analysis -> Feature Extraction -> Control Buses
                     |                                                      |
                     v                                                      v
-              Spectral Filter <--------- Blend Mode ---------------> Granular
+              Spectral Filter <--------- Blend Mode ----------------> Overdrive
                     |                                                      |
                     v                                                      v
-             Shimmer Reverb                                          Mod Delay
+                Granular <-----------------------------------------> Shimmer Reverb
                     |                                                      |
-                    +-----------> Output Mixer <----------+
+                    v                                                      v
+                Mod Delay <-------------------------------------------> Output Mixer
 ```
 
 ## License and Copyright
