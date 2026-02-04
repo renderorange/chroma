@@ -10,12 +10,11 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 
 | File | Description |
 |------|-------------|
-| `Chroma.sc` | Main class (~1280 lines) |
+| `Chroma.sc` | Main class (headless, ~730 lines) |
 | `run.sh` | Launcher with audio device selection |
 | `startup.scd` | Boot script with server options |
-| `run_gui.scd` | Simple GUI launcher |
 | `test_synths.scd` | Headless synth test (sclang) |
-| `test_integration.sh` | Full integration test suite (bash) |
+| `test_integration.sh` | Integration test suite (bash) |
 | `README.md` | User documentation |
 | `docs/plans/2026-02-03-chroma-effects-design.md` | Effects pedal design specification |
 | `docs/plans/2026-02-03-chroma-effects-implementation.md` | Effects implementation plan |
@@ -40,7 +39,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | 7 | Modulated delay SynthDef | Complete |
 | 8 | Output mixer | Complete |
 | 9 | Wire up synth creation | Complete |
-| 10 | Rebuild GUI | Complete |
+| 10 | Remove GUI (headless only) | Complete |
 | 11 | Update tests | Complete |
 | 12 | Update documentation | Complete |
 | 13 | Integration testing | Complete |
@@ -49,14 +48,8 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 ## Running Tests
 
 ```bash
-# Full integration test (headless + GUI)
+# Run integration tests
 ./test_integration.sh
-
-# Headless only (faster)
-./test_integration.sh headless
-
-# GUI only
-./test_integration.sh gui
 
 # Or run SuperCollider tests directly
 sclang test_synths.scd

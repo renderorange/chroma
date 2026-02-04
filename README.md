@@ -43,9 +43,11 @@ The device selection is saved to `~/.config/chroma/config`.
 ### From SuperCollider IDE
 
 ```supercollider
-Chroma.start;  // Launch with default settings
+Chroma.start;  // Launch headless audio engine
 Chroma.stop;   // Stop and cleanup
 ```
+
+Chroma runs headless (no GUI). Use the Terminal UI or OSC messages for control.
 
 ### Terminal UI
 
