@@ -85,6 +85,18 @@ jackd -d alsa -d "hw:$DEVICE" -r 48000 -p 1024 &
 JACK_PID=$!
 sleep 1
 
+# Cleanup function
+cleanup() {
+    echo ""
+    echo "Stopping JACK..."
+    kill $JACK_PID 2>/dev/null
+    wait $JACK_PID 2>/dev/null
+    exit 0
+}
+
+# Trap signals for cleanup
+trap cleanup SIGINT SIGTERM EXIT
+
 # Check if JACK started successfully
 if ! kill -0 $JACK_PID 2>/dev/null; then
     echo "Error: Failed to start JACK with hw:$DEVICE"
@@ -93,6 +105,3 @@ fi
 
 # Run Chroma
 sclang "$(dirname "$0")/startup.scd"
-
-# Cleanup JACK when done
-kill $JACK_PID 2>/dev/null
