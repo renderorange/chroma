@@ -51,6 +51,9 @@ func (c *Client) SetDelayTime(v float32) error       { return c.SendFloat("/chro
 func (c *Client) SetModRate(v float32) error         { return c.SendFloat("/chroma/modRate", v) }
 func (c *Client) SetModDepth(v float32) error        { return c.SendFloat("/chroma/modDepth", v) }
 func (c *Client) SetReverbDelayMix(v float32) error  { return c.SendFloat("/chroma/reverbDelayMix", v) }
+func (c *Client) SetOverdriveDrive(v float32) error { return c.SendFloat("/chroma/overdriveDrive", v) }
+func (c *Client) SetOverdriveTone(v float32) error  { return c.SendFloat("/chroma/overdriveTone", v) }
+func (c *Client) SetOverdriveMix(v float32) error   { return c.SendFloat("/chroma/overdriveMix", v) }
 func (c *Client) SetBlendMode(v int) error           { return c.SendInt("/chroma/blendMode", int32(v)) }
 func (c *Client) SetDryWet(v float32) error          { return c.SendFloat("/chroma/dryWet", v) }
 

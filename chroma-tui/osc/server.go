@@ -13,6 +13,9 @@ type State struct {
 	FilterAmount         float32
 	FilterCutoff         float32
 	FilterResonance      float32
+	OverdriveDrive       float32
+	OverdriveTone        float32
+	OverdriveMix         float32
 	GranularDensity      float32
 	GranularSize         float32
 	GranularPitchScatter float32
@@ -43,7 +46,7 @@ func NewServer(port int) *Server {
 
 	d := osc.NewStandardDispatcher()
 	d.AddMsgHandler("/chroma/state", func(msg *osc.Message) {
-		if len(msg.Arguments) >= 21 {
+		if len(msg.Arguments) >= 24 {
 			state := State{
 				Gain:                 toFloat32(msg.Arguments[0]),
 				InputFrozen:          toInt(msg.Arguments[1]) == 1,
@@ -51,21 +54,24 @@ func NewServer(port int) *Server {
 				FilterAmount:         toFloat32(msg.Arguments[3]),
 				FilterCutoff:         toFloat32(msg.Arguments[4]),
 				FilterResonance:      toFloat32(msg.Arguments[5]),
-				GranularDensity:      toFloat32(msg.Arguments[6]),
-				GranularSize:         toFloat32(msg.Arguments[7]),
-				GranularPitchScatter: toFloat32(msg.Arguments[8]),
-				GranularPosScatter:   toFloat32(msg.Arguments[9]),
-				GranularMix:          toFloat32(msg.Arguments[10]),
-				GranularFrozen:       toInt(msg.Arguments[11]) == 1,
-				ReverbDelayBlend:     toFloat32(msg.Arguments[12]),
-				DecayTime:            toFloat32(msg.Arguments[13]),
-				ShimmerPitch:         toFloat32(msg.Arguments[14]),
-				DelayTime:            toFloat32(msg.Arguments[15]),
-				ModRate:              toFloat32(msg.Arguments[16]),
-				ModDepth:             toFloat32(msg.Arguments[17]),
-				ReverbDelayMix:       toFloat32(msg.Arguments[18]),
-				BlendMode:            toInt(msg.Arguments[19]),
-				DryWet:               toFloat32(msg.Arguments[20]),
+				OverdriveDrive:       toFloat32(msg.Arguments[6]),
+				OverdriveTone:        toFloat32(msg.Arguments[7]),
+				OverdriveMix:         toFloat32(msg.Arguments[8]),
+				GranularDensity:      toFloat32(msg.Arguments[9]),
+				GranularSize:         toFloat32(msg.Arguments[10]),
+				GranularPitchScatter: toFloat32(msg.Arguments[11]),
+				GranularPosScatter:   toFloat32(msg.Arguments[12]),
+				GranularMix:          toFloat32(msg.Arguments[13]),
+				GranularFrozen:       toInt(msg.Arguments[14]) == 1,
+				ReverbDelayBlend:     toFloat32(msg.Arguments[15]),
+				DecayTime:            toFloat32(msg.Arguments[16]),
+				ShimmerPitch:         toFloat32(msg.Arguments[17]),
+				DelayTime:            toFloat32(msg.Arguments[18]),
+				ModRate:              toFloat32(msg.Arguments[19]),
+				ModDepth:             toFloat32(msg.Arguments[20]),
+				ReverbDelayMix:       toFloat32(msg.Arguments[21]),
+				BlendMode:            toInt(msg.Arguments[22]),
+				DryWet:               toFloat32(msg.Arguments[23]),
 			}
 			// Non-blocking send
 			select {
