@@ -192,10 +192,13 @@ func (m Model) renderButton(label string, active bool, ctrl control) string {
 		style = activeButtonStyle
 	}
 	btn := style.Render(fmt.Sprintf(" %s ", label))
+
+	// Add top margin (1 line) and left-align
+	margin := "\n"
 	if m.focused == ctrl {
-		return focusedStyle.Render("▶ ") + btn
+		return margin + focusedStyle.Render("▶ ") + btn
 	}
-	return "  " + btn
+	return margin + btn
 }
 
 func (m Model) renderModeSelector(width int) string {
