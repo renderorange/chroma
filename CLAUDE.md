@@ -22,6 +22,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | `docs/plans/2026-02-03-input-freeze-design.md` | Input freeze design |
 | `docs/plans/2026-02-03-tui-design.md` | TUI and MIDI control design |
 | `docs/plans/2026-02-03-tui-implementation.md` | TUI implementation plan |
+| `docs/plans/2026-02-03-tui-refactor-implementation.md` | TUI refactor plan (full-width, overdrive) |
 | `chroma-tui/` | Go TUI application with MIDI support |
 
 ## Current Status
@@ -44,6 +45,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | 12 | Update documentation | Complete |
 | 13 | Integration testing | Complete |
 | 14 | Overdrive effect | Complete |
+| 15 | TUI refactor: full-width layout with overdrive | Complete |
 
 ## Running Tests
 
@@ -75,4 +77,4 @@ Chroma.start;
 - Update all documentation (README.md, CLAUDE.md, design docs) after any code changes
 
 ## Last Updated
-2026-02-03
+2026-02-04
