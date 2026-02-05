@@ -51,6 +51,8 @@ Chroma runs headless (no GUI). Use the Terminal UI or OSC messages for control.
 
 ### Terminal UI
 
+![chroma-tui](images/chroma-tui.png)
+
 ```bash
 # Install deps
 sudo apt update && apt install libasound2-dev
