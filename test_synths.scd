@@ -3,43 +3,49 @@
 (
 "=== Testing Chroma Effects ===".postln;
 
-// Use dummy audio driver
-Server.default.options.device = "dummy";
-Server.default.options.sampleRate = 48000;
-Server.default.options.blockSize = 64;
-Server.default.options.numOutputBusChannels = 2;
-Server.default.options.numInputBusChannels = 2;
+// Use non-realtime server for headless testing
+s = Server.internal;
+s.options.inDevice = nil;
+s.options.outDevice = nil;
+s.options.sampleRate = 48000;
+s.options.blockSize = 64;
+s.options.numOutputBusChannels = 2;
+s.options.numInputBusChannels = 2;
+s.options.numAudioBusChannels = 1024;
+s.options.numWireBufs = 128;
+s.options.maxNodes = 2048;
+s.options.maxSynthDefs = 2048;
 
-Server.default.waitForBoot({
+s.waitForBoot({
     "Server booted with dummy audio".postln;
 
     fork {
         var instance;
 
         // Create instance manually (skip GUI)
-        instance = Chroma(Server.default);
+        instance = Chroma(s);
 
         "Allocating resources...".postln;
         instance.allocateResources;
-        Server.default.sync;
+        s.sync;
         "  - FFT buffer allocated".postln;
         "  - Control buses allocated".postln;
         "  - Grain buffers allocated".postln;
 
         "Loading SynthDefs...".postln;
         instance.loadSynthDefs;
-        Server.default.sync;
+        s.sync;
         "  - All SynthDefs loaded".postln;
 
         "Creating synths...".postln;
         instance.createSynths;
-        Server.default.sync;
+        s.sync;
         "  - All synths created".postln;
 
         0.5.wait;
 
         "Querying node tree...".postln;
-        Server.default.queryAllNodes;
+        s.queryAllNodes;
 
         1.wait;
 
@@ -78,6 +84,14 @@ Server.default.waitForBoot({
 
         instance.setGranularMix(0.5);
         ("  - granularMix: " ++ instance.granularParams[\mix]).postln;
+
+        "Testing granular mix range for pronounced mode...".postln;
+        instance.setGranularMix(0.9);
+        ("  - granularMix (pronounced): " ++ instance.granularParams[\mix]).postln;
+        instance.setGranularMix(0.3);
+        ("  - granularMix (subtle): " ++ instance.granularParams[\mix]).postln;
+        instance.setGranularMix(0.5); // reset to default
+        ("  - granularMix (reset): " ++ instance.granularParams[\mix]).postln;
 
         "Testing input freeze...".postln;
         ("  - inputFrozen before: " ++ instance.inputFrozen).postln;
@@ -119,6 +133,21 @@ Server.default.waitForBoot({
 
         instance.setReverbDelayMix(0.4);
         ("  - reverbDelayMix: " ++ instance.reverbDelayParams[\mix]).postln;
+
+        "Testing grain intensity...".postln;
+        ("  - grainIntensity before: " ++ instance.grainIntensity).postln;
+        instance.setGrainIntensity(\pronounced);
+        ("  - grainIntensity after: " ++ instance.grainIntensity).postln;
+        instance.setGrainIntensity(\subtle);
+        ("  - grainIntensity reset: " ++ instance.grainIntensity).postln;
+
+        "Testing grain intensity multipliers...".postln;
+        ("  - subtle multiplier: " ++ grainIntensityMultipliers[\subtle]).postln;
+        ("  - pronounced multiplier: " ++ grainIntensityMultipliers[\pronounced]).postln;
+
+        "Testing grain intensity parameter validation...".postln;
+        instance.setGrainIntensity(\invalid);
+        ("  - invalid mode falls back to subtle: " ++ instance.grainIntensity).postln;
 
         "Testing output controls...".postln;
         instance.setDryWet(0.6);

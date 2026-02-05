@@ -20,6 +20,7 @@ Chroma {
     var <reverbDelayParams;
     var <inputGain;
     var <>grainIntensity = \subtle;
+    var <grainIntensityMultipliers;  // Dictionary for intensity multiplier constants
 
     *new { |server|
         ^super.new.init(server);
@@ -42,6 +43,10 @@ Chroma {
         inputFrozen = false;
         inputFreezeLength = 0.1;
         inputGain = 1.0;
+        grainIntensityMultipliers = (
+            subtle: 1.0,        // Normal granular effect intensity
+            pronounced: 3.0     // 3x intensity based on perceptual testing for pronounced grain effect
+        );
         filterParams = (
             amount: 0.5,
             cutoff: 2000,
@@ -251,7 +256,8 @@ Chroma {
             baseFilterAmount=0.5, baseOverdriveDrive=0.5, baseOverdriveTone=0.7,
             baseGrainDensity=10, baseGrainSize=0.1,
             basePitchScatter=0.1, basePosScatter=0.2,
-            baseReverbDelayBlend=0.5, baseDecayTime=3, baseModRate=0.5, baseModDepth=0.3|
+            baseReverbDelayBlend=0.5, baseDecayTime=3, baseModRate=0.5, baseModDepth=0.3,
+            grainIntensityMultiplier=1.0|
 
             var bands, centroid, spread, flatness;
             var filterGains, overdriveDrive, overdriveTone;
@@ -295,20 +301,20 @@ Chroma {
             // Granular parameters
             grainDensity = Select.kr(mode, [
                 // Mirror: more energy = denser
-                bands.sum.linlin(0, 4, baseGrainDensity * 0.5, baseGrainDensity * 2),
+                bands.sum.linlin(0, 4, baseGrainDensity * 0.5 * grainIntensityMultiplier, baseGrainDensity * 2 * grainIntensityMultiplier),
                 // Complement: more energy = sparser
-                bands.sum.linlin(0, 4, baseGrainDensity * 2, baseGrainDensity * 0.5),
+                bands.sum.linlin(0, 4, baseGrainDensity * 2 * grainIntensityMultiplier, baseGrainDensity * 0.5 * grainIntensityMultiplier),
                 // Transform: flatness controls density
-                flatness.linlin(0, 1, baseGrainDensity * 0.3, baseGrainDensity * 3)
+                flatness.linlin(0, 1, baseGrainDensity * 0.3 * grainIntensityMultiplier, baseGrainDensity * 3 * grainIntensityMultiplier)
             ]);
 
             grainSize = Select.kr(mode, [
                 // Mirror: more energy = smaller grains
-                bands.sum.linlin(0, 4, baseGrainSize * 2, baseGrainSize * 0.5),
+                bands.sum.linlin(0, 4, baseGrainSize * 2 * grainIntensityMultiplier, baseGrainSize * 0.5 * grainIntensityMultiplier),
                 // Complement: more energy = larger grains
-                bands.sum.linlin(0, 4, baseGrainSize * 0.5, baseGrainSize * 2),
+                bands.sum.linlin(0, 4, baseGrainSize * 0.5 * grainIntensityMultiplier, baseGrainSize * 2 * grainIntensityMultiplier),
                 // Transform: spread controls size
-                spread.linlin(0, 1, baseGrainSize * 0.5, baseGrainSize * 2)
+                spread.linlin(0, 1, baseGrainSize * 0.5 * grainIntensityMultiplier, baseGrainSize * 2 * grainIntensityMultiplier)
             ]);
 
             pitchScatter = Select.kr(mode, [
@@ -645,7 +651,8 @@ Chroma {
             \baseReverbDelayBlend, reverbDelayParams[\blend],
             \baseDecayTime, reverbDelayParams[\decayTime],
             \baseModRate, reverbDelayParams[\modRate],
-            \baseModDepth, reverbDelayParams[\modDepth]
+            \baseModDepth, reverbDelayParams[\modDepth],
+            \grainIntensityMultiplier, grainIntensity == \pronounced ? 3.0 : 1.0
         ], synths[\analysis], \addAfter);
 
         // Spectral filter (reads from frozen audio)
@@ -753,6 +760,7 @@ Chroma {
         OSCdef(\chromaGranularFreeze, { |msg|
             if(msg[1].asBoolean != frozen) { this.toggleGranularFreeze };
         }, '/chroma/granularFreeze');
+        OSCdef(\chromaGrainIntensity, { |msg| this.setGrainIntensity(msg[1].asSymbol) }, '/chroma/grainIntensity');
 
         // Reverb/Delay controls
         OSCdef(\chromaReverbDelayBlend, { |msg| this.setReverbDelayBlend(msg[1]) }, '/chroma/reverbDelayBlend');
@@ -795,6 +803,7 @@ Chroma {
             granularParams[\posScatter],
             granularParams[\mix],
             frozen.asInteger,
+            grainIntensity.asString,  // Add grain intensity to state message
             reverbDelayParams[\blend],
             reverbDelayParams[\decayTime],
             reverbDelayParams[\shimmerPitch],
@@ -823,6 +832,7 @@ Chroma {
         OSCdef(\chromaGranularPosScatter).free;
         OSCdef(\chromaGranularMix).free;
         OSCdef(\chromaGranularFreeze).free;
+        OSCdef(\chromaGrainIntensity).free;
         OSCdef(\chromaReverbDelayBlend).free;
         OSCdef(\chromaDecayTime).free;
         OSCdef(\chromaShimmerPitch).free;
@@ -979,9 +989,16 @@ Chroma {
     }
 
     setGrainIntensity { |mode|
-        grainIntensity = mode;
+        var validModes = grainIntensityMultipliers.keys;
+        var validMode = validModes.includes(mode).if({ mode }, { \subtle });
+        
+        if(validMode != mode) {
+            "Invalid grainIntensity mode: %. Using subtle".format(mode).warn;
+        };
+        
+        grainIntensity = validMode;
         if(synths[\blend].notNil) { 
-            synths[\blend].set(\grainIntensityMultiplier, mode == \pronounced ? 3.0 : 1.0);
+            synths[\blend].set(\grainIntensityMultiplier, grainIntensityMultipliers[validMode]);
         }
     }
 

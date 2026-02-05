@@ -7,7 +7,11 @@
    - Executing build, test, or deployment commands
    - Making any system-level changes
 
-2. **Commit Message Standards**: Never add `Co-authored-by:` or similar attribution lines to commit messages. Commit messages should be clean and focused on the change description only.
+2. **Commit Message Standards**:
+   - Never add `Co-authored-by:` or similar attribution lines to commit messages
+   - Never add git task types (e.g., "feat:", "fix:", "docs:", "test:", "chore:") to commit messages
+   - Never use work-in-progress markers like "WIP:" or "TODO:" in commit messages
+   - Commit messages should be clean, descriptive sentences focused on the change
 
 3. **Agent Skills Frameworks**: Ensure the following skills frameworks are installed and being used:
     - [superpowers](https://github.com/obra/superpowers)

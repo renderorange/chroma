@@ -84,6 +84,7 @@ Live buffer granular synthesis with freeze capability.
 |-----------|-------|---------|-------------|
 | `grainDensity` | 1-50 Hz | 10 | Grains triggered per second |
 | `grainSize` | 0.01-0.5 s | 0.1 | Duration of each grain |
+| `grainIntensity` | subtle/pronounced | subtle | Overall granular effect strength |
 | `pitchScatter` | 0-1 | 0.1 | Random pitch variation (±1 octave at max) |
 | `posScatter` | 0-1 | 0.2 | How far back in buffer to read |
 | `freeze` | 0/1 | 0 | Toggle freeze mode |

@@ -22,6 +22,7 @@ type State struct {
 	GranularPosScatter   float32
 	GranularMix          float32
 	GranularFrozen       bool
+	GrainIntensity       string
 	ReverbDelayBlend     float32
 	DecayTime            float32
 	ShimmerPitch         float32
@@ -46,7 +47,7 @@ func NewServer(port int) *Server {
 
 	d := osc.NewStandardDispatcher()
 	d.AddMsgHandler("/chroma/state", func(msg *osc.Message) {
-		if len(msg.Arguments) >= 24 {
+		if len(msg.Arguments) >= 25 {
 			state := State{
 				Gain:                 toFloat32(msg.Arguments[0]),
 				InputFrozen:          toInt(msg.Arguments[1]) == 1,
@@ -63,15 +64,16 @@ func NewServer(port int) *Server {
 				GranularPosScatter:   toFloat32(msg.Arguments[12]),
 				GranularMix:          toFloat32(msg.Arguments[13]),
 				GranularFrozen:       toInt(msg.Arguments[14]) == 1,
-				ReverbDelayBlend:     toFloat32(msg.Arguments[15]),
-				DecayTime:            toFloat32(msg.Arguments[16]),
-				ShimmerPitch:         toFloat32(msg.Arguments[17]),
-				DelayTime:            toFloat32(msg.Arguments[18]),
-				ModRate:              toFloat32(msg.Arguments[19]),
-				ModDepth:             toFloat32(msg.Arguments[20]),
-				ReverbDelayMix:       toFloat32(msg.Arguments[21]),
-				BlendMode:            toInt(msg.Arguments[22]),
-				DryWet:               toFloat32(msg.Arguments[23]),
+				GrainIntensity:       toString(msg.Arguments[15]),
+				ReverbDelayBlend:     toFloat32(msg.Arguments[16]),
+				DecayTime:            toFloat32(msg.Arguments[17]),
+				ShimmerPitch:         toFloat32(msg.Arguments[18]),
+				DelayTime:            toFloat32(msg.Arguments[19]),
+				ModRate:              toFloat32(msg.Arguments[20]),
+				ModDepth:             toFloat32(msg.Arguments[21]),
+				ReverbDelayMix:       toFloat32(msg.Arguments[22]),
+				BlendMode:            toInt(msg.Arguments[23]),
+				DryWet:               toFloat32(msg.Arguments[24]),
 			}
 			// Non-blocking send
 			select {
@@ -124,5 +126,14 @@ func toInt(v interface{}) int {
 		return int(val)
 	default:
 		return 0
+	}
+}
+
+func toString(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	default:
+		return "subtle"
 	}
 }

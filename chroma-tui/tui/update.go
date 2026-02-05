@@ -46,6 +46,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter", " ":
 		m.toggleFocused()
 
+	case "i":
+		m.toggleGrainIntensity()
+
 	case "1":
 		m.setBlendMode(0)
 	case "2":
@@ -139,6 +142,15 @@ func (m *Model) toggleFocused() {
 func (m *Model) setBlendMode(mode int) {
 	m.BlendMode = mode
 	m.client.SetBlendMode(mode)
+}
+
+func (m *Model) toggleGrainIntensity() {
+	if m.GrainIntensity == "subtle" {
+		m.GrainIntensity = "pronounced"
+	} else {
+		m.GrainIntensity = "subtle"
+	}
+	m.client.SetGrainIntensity(m.GrainIntensity)
 }
 
 func clamp(v, min, max float32) float32 {

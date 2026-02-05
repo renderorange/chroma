@@ -22,6 +22,7 @@ const (
 	ctrlGranularPosScatter
 	ctrlGranularMix
 	ctrlGranularFreeze
+	ctrlGrainIntensity
 	ctrlReverbDelayBlend
 	ctrlDecayTime
 	ctrlShimmerPitch
@@ -51,6 +52,7 @@ type Model struct {
 	GranularPosScatter   float32
 	GranularMix          float32
 	GranularFrozen       bool
+	GrainIntensity       string // "subtle" or "pronounced"
 	ReverbDelayBlend     float32
 	DecayTime            float32
 	ShimmerPitch         float32
@@ -88,6 +90,7 @@ func NewModel(client *osc.Client) Model {
 		GranularPitchScatter: 0.2,
 		GranularPosScatter:   0.3,
 		GranularMix:          0.5,
+		GrainIntensity:       "subtle",
 		ReverbDelayBlend:     0.5,
 		DecayTime:            3,
 		ShimmerPitch:         12,
@@ -119,6 +122,7 @@ func (m *Model) ApplyState(s osc.State) {
 	m.GranularPosScatter = s.GranularPosScatter
 	m.GranularMix = s.GranularMix
 	m.GranularFrozen = s.GranularFrozen
+	m.GrainIntensity = s.GrainIntensity
 	m.ReverbDelayBlend = s.ReverbDelayBlend
 	m.DecayTime = s.DecayTime
 	m.ShimmerPitch = s.ShimmerPitch

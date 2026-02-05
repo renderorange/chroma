@@ -100,6 +100,7 @@ cd chroma-tui && go build
 - ←→ : Adjust values
 - Enter/Space : Toggle freeze buttons
 - 1-3 : Switch blend modes
+- i : Toggle grain intensity (subtle/pronounced)
 - q : Quit
 
 **MIDI:** Automatically connects to first available MIDI input. Configure mappings in `~/.config/chroma/midi.toml`.

@@ -27,7 +27,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 
 ## Current Status
 
-**Implementation complete. All tests passing.**
+**Implementation complete. Tests passing with headless audio server limitations.**
 
 | Task | Description | Status |
 |------|-------------|--------|
@@ -46,6 +46,7 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | 13 | Integration testing | Complete |
 | 14 | Overdrive effect | Complete |
 | 15 | TUI refactor: full-width layout with overdrive | Complete |
+| 16 | Enhanced granular effect with user-selectable intensity | Complete |
 
 ## Running Tests
 
@@ -77,4 +78,4 @@ Chroma.start;
 - Update all documentation (README.md, CLAUDE.md, design docs) after any code changes
 
 ## Last Updated
-2026-02-04
+2026-02-06

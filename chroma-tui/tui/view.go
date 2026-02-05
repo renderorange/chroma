@@ -14,29 +14,29 @@ const (
 
 var (
 	sectionTitleStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205"))
+				Bold(true).
+				Foreground(lipgloss.Color("205"))
 
 	focusedStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("205"))
+			Foreground(lipgloss.Color("205"))
 
 	normalStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("249"))
+			Foreground(lipgloss.Color("249"))
 
 	activeButtonStyle = lipgloss.NewStyle().
-		Background(lipgloss.Color("205")).
-		Foreground(lipgloss.Color("255"))
+				Background(lipgloss.Color("205")).
+				Foreground(lipgloss.Color("255"))
 
 	inactiveButtonStyle = lipgloss.NewStyle().
-		Background(lipgloss.Color("244")).
-		Foreground(lipgloss.Color("255"))
+				Background(lipgloss.Color("244")).
+				Foreground(lipgloss.Color("255"))
 
 	selectedModeStyle = lipgloss.NewStyle().
-		Background(lipgloss.Color("205")).
-		Foreground(lipgloss.Color("255"))
+				Background(lipgloss.Color("205")).
+				Foreground(lipgloss.Color("255"))
 
 	unselectedModeStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("244"))
+				Foreground(lipgloss.Color("244"))
 )
 
 func (m Model) View() string {
@@ -69,7 +69,7 @@ func (m Model) View() string {
 		status += " │ MIDI: " + m.midiPort
 	}
 	status += "\n"
-	status += margin + "Tab/↑↓: Navigate │ ←→: Adjust │ Enter: Toggle │ 1-3: Mode │ q: Quit"
+	status += margin + "Tab/↑↓: Navigate │ ←→: Adjust │ Enter: Toggle │ i: Intensity │ 1-3: Mode │ q: Quit"
 
 	return content + status
 }
@@ -129,6 +129,7 @@ func (m Model) renderGranularControls(width int) []string {
 		m.renderSlider("PosScat", m.GranularPosScatter, 0, 1, width, ctrlGranularPosScatter),
 		m.renderSlider("Mix", m.GranularMix, 0, 1, width, ctrlGranularMix),
 		m.renderButton("GRAIN FREEZE", m.GranularFrozen, ctrlGranularFreeze),
+		m.renderIntensitySelector(width),
 	}
 }
 
@@ -216,6 +217,25 @@ func (m Model) renderModeSelector(width int) string {
 
 	line := fmt.Sprintf("%-*s %s", labelWidth, "Mode", strings.Join(parts, " "))
 	if m.focused == ctrlBlendMode {
+		return focusedStyle.Render(line)
+	}
+	return normalStyle.Render(line)
+}
+
+func (m Model) renderIntensitySelector(width int) string {
+	intensities := []string{"SUBTLE", "PRONOUNCED"}
+	var parts []string
+
+	for _, intensity := range intensities {
+		if intensity == strings.ToUpper(m.GrainIntensity) {
+			parts = append(parts, selectedModeStyle.Render(fmt.Sprintf(" %s ", intensity)))
+		} else {
+			parts = append(parts, unselectedModeStyle.Render(fmt.Sprintf(" %s ", intensity)))
+		}
+	}
+
+	line := fmt.Sprintf("%-*s %s", labelWidth, "Intensity", strings.Join(parts, " "))
+	if m.focused == ctrlGrainIntensity {
 		return focusedStyle.Render(line)
 	}
 	return normalStyle.Render(line)
