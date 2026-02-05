@@ -1,4 +1,4 @@
-# Claude Session Index
+# Agents Session Index
 
 **Read this file at the start of each session.**
 
