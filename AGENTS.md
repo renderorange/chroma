@@ -9,14 +9,17 @@
 
 2. **Commit Message Standards**: Never add `Co-authored-by:` or similar attribution lines to commit messages. Commit messages should be clean and focused on the change description only.
 
-3. **Documentation First**: Always read all project documentation before starting any work session:
+3. **Agent Skills Frameworks**: Ensure the following skills frameworks are installed and being used:
+    - [superpowers](https://github.com/obra/superpowers)
+
+4. **Documentation First**: Always read all project documentation before starting any work session:
    - Read AGENTS.md file first if it exists
    - Read `AGENTS_SESSION.md` and the project files listed within
    - Read `Current Status` for tracking where to continue in the project
    - Check for README.md, package.json, or other config files
    - Look for existing patterns and conventions in the codebase
 
-4. **Documentation Updates**: Always update project documentation to track progress:
+5. **Documentation Updates**: Always update project documentation to track progress:
    - Update AGENTS.md when adding new general patterns or discovering issues
    - Document any model limitations or compatibility problems
    - Note successful workflows and command sequences
