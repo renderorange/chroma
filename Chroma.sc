@@ -18,6 +18,8 @@ Chroma {
     var <filterParams;
     var <granularParams;
     var <reverbDelayParams;
+    var <inputGain;
+    var <>grainIntensity = \subtle;
 
     *new { |server|
         ^super.new.init(server);
@@ -1030,6 +1032,13 @@ Chroma {
         reverbDelayParams[\modDepth] = val.clip(0, 1);
         if(synths[\modDelay].notNil) { synths[\modDelay].set(\modDepth, val) };
         if(synths[\blend].notNil) { synths[\blend].set(\baseModDepth, val) };
+    }
+
+    setGrainIntensity { |mode|
+        grainIntensity = mode;
+        if(synths[\blend].notNil) { 
+            synths[\blend].set(\grainIntensityMultiplier, mode == \pronounced ? 3.0 : 1.0);
+        }
     }
 
     setReverbDelayMix { |val|
