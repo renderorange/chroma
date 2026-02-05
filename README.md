@@ -127,6 +127,7 @@ cd chroma-tui && go build
 | Overdrive Mix | 0-1 | Dry/wet blend for overdrive |
 | Granular Mix | 0-1 | Granular effect level |
 | Grain Freeze | on/off | Freeze granular buffer for textural grains |
+| Grain Intensity | subtle/pronounced | Overall granular effect strength |
 | Reverb Mix | 0-1 | Shimmer reverb level |
 | Delay Mix | 0-1 | Modulated delay level |
 | Reverb/Delay Blend | 0-1 | Balance between reverb and delay paths |
