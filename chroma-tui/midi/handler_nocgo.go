@@ -22,7 +22,7 @@ func NewHandler(client *osc.Client, cfg config.Config) *Handler {
 }
 
 func (h *Handler) Start() error {
-	return fmt.Errorf("MIDI support requires CGO (install libasound2-dev and rebuild)")
+	return fmt.Errorf("MIDI not available (this binary was built without CGO support)")
 }
 
 func (h *Handler) Stop() {

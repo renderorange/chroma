@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ALSA development headers
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: chroma-tui/go.sum
+
+      - name: Run tests
+        working-directory: chroma-tui
+        run: go test -v ./...
+
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            suffix: ''
+            can_test: true
+            cgo_enabled: '1'  # Native build with MIDI support
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            suffix: ''
+            can_test: true
+            cgo_enabled: '1'  # Native ARM64 build with MIDI support
+          - runner: macos-15
+            goos: darwin
+            goarch: amd64
+            suffix: ''
+            can_test: true
+            cgo_enabled: '1'  # Native build with MIDI support
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+            suffix: ''
+            can_test: true
+            cgo_enabled: '1'  # Native build with MIDI support
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            suffix: '.exe'
+            can_test: true
+            cgo_enabled: '1'  # Native build with MIDI support
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ALSA development headers (Linux only)
+        if: matrix.goos == 'linux' && matrix.cgo_enabled == '1'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Install MinGW-w64 (Windows only)
+        if: matrix.goos == 'windows' && matrix.cgo_enabled == '1'
+        run: choco install mingw -y
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: chroma-tui/go.sum
+
+      - name: Build binary
+        working-directory: chroma-tui
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          CC: ${{ matrix.goos == 'windows' && 'gcc' || '' }}
+        run: |
+          go build -ldflags="-s -w" -o chroma-tui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+
+      - name: Smoke test binary
+        if: matrix.can_test
+        working-directory: chroma-tui
+        run: |
+          ./chroma-tui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} --help
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chroma-tui-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: chroma-tui/chroma-tui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          find artifacts -type f -name 'chroma-tui-*' -exec mv {} release/ \;
+          ls -la release/
+
+      - name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
+          git push origin "v${{ github.event.inputs.version }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: Chroma TUI v${{ github.event.inputs.version }}
+          generate_release_notes: true
+          files: release/*

@@ -53,9 +53,37 @@ Chroma runs headless (no GUI). Use the Terminal UI or OSC messages for control.
 
 ![chroma-tui](images/chroma-tui.png)
 
+Download pre-built binaries from [Releases](https://github.com/renderorange/chroma/releases):
+
 ```bash
-# Install deps
-sudo apt update && apt install libasound2-dev
+# Linux (amd64)
+curl -LO https://github.com/renderorange/chroma/releases/latest/download/chroma-tui-linux-amd64
+chmod +x chroma-tui-linux-amd64
+./chroma-tui-linux-amd64
+
+# Linux (arm64)
+curl -LO https://github.com/renderorange/chroma/releases/latest/download/chroma-tui-linux-arm64
+chmod +x chroma-tui-linux-arm64
+./chroma-tui-linux-arm64
+
+# macOS (Apple Silicon)
+curl -LO https://github.com/renderorange/chroma/releases/latest/download/chroma-tui-darwin-arm64
+chmod +x chroma-tui-darwin-arm64
+./chroma-tui-darwin-arm64
+
+# macOS (Intel)
+curl -LO https://github.com/renderorange/chroma/releases/latest/download/chroma-tui-darwin-amd64
+chmod +x chroma-tui-darwin-amd64
+./chroma-tui-darwin-amd64
+
+# Windows (amd64) - download and run chroma-tui-windows-amd64.exe
+```
+
+Or build from source:
+
+```bash
+# Install deps (Linux)
+sudo apt update && sudo apt install libasound2-dev
 
 # Build the TUI (requires Go)
 cd chroma-tui && go build
