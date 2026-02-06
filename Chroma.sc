@@ -840,11 +840,6 @@ Chroma {
     }
 
     cleanupOSC {
-        // Stop spectrum routine
-        if(spectrumRoutine.notNil) {
-            spectrumRoutine.stop;
-            spectrumRoutine = nil;
-        }
         OSCdef(\chromaGain).free;
         OSCdef(\chromaInputFreeze).free;
         OSCdef(\chromaInputFreezeLength).free;
