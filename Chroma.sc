@@ -742,48 +742,117 @@ Chroma {
         var replyAddr = NetAddr("127.0.0.1", replyPort);
 
         // Input controls
-        OSCdef(\chromaGain, { |msg| this.setInputGain(msg[1]) }, '/chroma/gain');
+        OSCdef(\chromaGain, { |msg|
+            this.setInputGain(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/gain');
         OSCdef(\chromaInputFreeze, { |msg|
             if(msg[1].asBoolean != inputFrozen) { this.toggleInputFreeze };
+            this.sendState(replyAddr);
         }, '/chroma/inputFreeze');
-        OSCdef(\chromaInputFreezeLength, { |msg| this.setInputFreezeLength(msg[1]) }, '/chroma/inputFreezeLength');
+        OSCdef(\chromaInputFreezeLength, { |msg|
+            this.setInputFreezeLength(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/inputFreezeLength');
 
         // Filter controls
-        OSCdef(\chromaFilterAmount, { |msg| this.setFilterAmount(msg[1]) }, '/chroma/filterAmount');
-        OSCdef(\chromaFilterCutoff, { |msg| this.setFilterCutoff(msg[1]) }, '/chroma/filterCutoff');
-        OSCdef(\chromaFilterResonance, { |msg| this.setFilterResonance(msg[1]) }, '/chroma/filterResonance');
+        OSCdef(\chromaFilterAmount, { |msg|
+            this.setFilterAmount(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/filterAmount');
+        OSCdef(\chromaFilterCutoff, { |msg|
+            this.setFilterCutoff(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/filterCutoff');
+        OSCdef(\chromaFilterResonance, { |msg|
+            this.setFilterResonance(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/filterResonance');
 
         // Overdrive controls
-        OSCdef(\chromaOverdriveDrive, { |msg| this.setOverdriveDrive(msg[1]) }, '/chroma/overdriveDrive');
-        OSCdef(\chromaOverdriveTone, { |msg| this.setOverdriveTone(msg[1]) }, '/chroma/overdriveTone');
-        OSCdef(\chromaOverdriveMix, { |msg| this.setOverdriveMix(msg[1]) }, '/chroma/overdriveMix');
+        OSCdef(\chromaOverdriveDrive, { |msg|
+            this.setOverdriveDrive(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/overdriveDrive');
+        OSCdef(\chromaOverdriveTone, { |msg|
+            this.setOverdriveTone(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/overdriveTone');
+        OSCdef(\chromaOverdriveMix, { |msg|
+            this.setOverdriveMix(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/overdriveMix');
 
         // Granular controls
-        OSCdef(\chromaGranularDensity, { |msg| this.setGrainDensity(msg[1]) }, '/chroma/granularDensity');
-        OSCdef(\chromaGranularSize, { |msg| this.setGrainSize(msg[1]) }, '/chroma/granularSize');
-        OSCdef(\chromaGranularPitchScatter, { |msg| this.setGrainPitchScatter(msg[1]) }, '/chroma/granularPitchScatter');
-        OSCdef(\chromaGranularPosScatter, { |msg| this.setGrainPosScatter(msg[1]) }, '/chroma/granularPosScatter');
-        OSCdef(\chromaGranularMix, { |msg| this.setGranularMix(msg[1]) }, '/chroma/granularMix');
+        OSCdef(\chromaGranularDensity, { |msg|
+            this.setGrainDensity(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/granularDensity');
+        OSCdef(\chromaGranularSize, { |msg|
+            this.setGrainSize(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/granularSize');
+        OSCdef(\chromaGranularPitchScatter, { |msg|
+            this.setGrainPitchScatter(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/granularPitchScatter');
+        OSCdef(\chromaGranularPosScatter, { |msg|
+            this.setGrainPosScatter(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/granularPosScatter');
+        OSCdef(\chromaGranularMix, { |msg|
+            this.setGranularMix(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/granularMix');
         OSCdef(\chromaGranularFreeze, { |msg|
             if(msg[1].asBoolean != frozen) { this.toggleGranularFreeze };
+            this.sendState(replyAddr);
         }, '/chroma/granularFreeze');
-        OSCdef(\chromaGrainIntensity, { |msg| this.setGrainIntensity(msg[1].asSymbol) }, '/chroma/grainIntensity');
+        OSCdef(\chromaGrainIntensity, { |msg|
+            this.setGrainIntensity(msg[1].asSymbol);
+            this.sendState(replyAddr);
+        }, '/chroma/grainIntensity');
 
         // Reverb/Delay controls
-        OSCdef(\chromaReverbDelayBlend, { |msg| this.setReverbDelayBlend(msg[1]) }, '/chroma/reverbDelayBlend');
-        OSCdef(\chromaDecayTime, { |msg| this.setDecayTime(msg[1]) }, '/chroma/decayTime');
-        OSCdef(\chromaShimmerPitch, { |msg| this.setShimmerPitch(msg[1]) }, '/chroma/shimmerPitch');
-        OSCdef(\chromaDelayTime, { |msg| this.setDelayTime(msg[1]) }, '/chroma/delayTime');
-        OSCdef(\chromaModRate, { |msg| this.setModRate(msg[1]) }, '/chroma/modRate');
-        OSCdef(\chromaModDepth, { |msg| this.setModDepth(msg[1]) }, '/chroma/modDepth');
-        OSCdef(\chromaReverbDelayMix, { |msg| this.setReverbDelayMix(msg[1]) }, '/chroma/reverbDelayMix');
+        OSCdef(\chromaReverbDelayBlend, { |msg|
+            this.setReverbDelayBlend(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/reverbDelayBlend');
+        OSCdef(\chromaDecayTime, { |msg|
+            this.setDecayTime(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/decayTime');
+        OSCdef(\chromaShimmerPitch, { |msg|
+            this.setShimmerPitch(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/shimmerPitch');
+        OSCdef(\chromaDelayTime, { |msg|
+            this.setDelayTime(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/delayTime');
+        OSCdef(\chromaModRate, { |msg|
+            this.setModRate(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/modRate');
+        OSCdef(\chromaModDepth, { |msg|
+            this.setModDepth(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/modDepth');
+        OSCdef(\chromaReverbDelayMix, { |msg|
+            this.setReverbDelayMix(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/reverbDelayMix');
 
         // Global controls
         OSCdef(\chromaBlendMode, { |msg|
             var modes = [\mirror, \complement, \transform];
             this.setBlendMode(modes[msg[1].asInteger.clip(0, 2)]);
+            this.sendState(replyAddr);
         }, '/chroma/blendMode');
-        OSCdef(\chromaDryWet, { |msg| this.setDryWet(msg[1]) }, '/chroma/dryWet');
+        OSCdef(\chromaDryWet, { |msg|
+            this.setDryWet(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/dryWet');
 
         // Sync request - send full state
         OSCdef(\chromaSync, { |msg|
