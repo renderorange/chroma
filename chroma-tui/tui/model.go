@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	"github.com/renderorange/chroma/chroma-tui/osc"
 )
 
@@ -73,6 +75,9 @@ type Model struct {
 	// Visualizer state
 	Spectrum [8]float32
 
+	// Pending changes tracking
+	pendingChanges map[control]time.Time
+
 	// OSC
 	client *osc.Client
 }
@@ -103,38 +108,94 @@ func NewModel(client *osc.Client) Model {
 		ReverbDelayMix:       0.3,
 		DryWet:               0.5,
 
-		focused:   ctrlGain,
-		connected: false,
-		client:    client,
+		focused:        ctrlGain,
+		connected:      false,
+		client:         client,
+		pendingChanges: make(map[control]time.Time),
 	}
 }
 
 func (m *Model) ApplyState(s osc.State) {
-	m.Gain = s.Gain
-	m.InputFrozen = s.InputFrozen
-	m.InputFreezeLength = s.InputFreezeLength
-	m.FilterAmount = s.FilterAmount
-	m.FilterCutoff = s.FilterCutoff
-	m.FilterResonance = s.FilterResonance
-	m.OverdriveDrive = s.OverdriveDrive
-	m.OverdriveTone = s.OverdriveTone
-	m.OverdriveMix = s.OverdriveMix
-	m.GranularDensity = s.GranularDensity
-	m.GranularSize = s.GranularSize
-	m.GranularPitchScatter = s.GranularPitchScatter
-	m.GranularPosScatter = s.GranularPosScatter
-	m.GranularMix = s.GranularMix
-	m.GranularFrozen = s.GranularFrozen
+	// Clean up stale pending changes
+	m.cleanupStalePendingChanges()
+
+	// Only update values that don't have pending user changes
+	if !m.hasPendingChange(ctrlGain) {
+		m.Gain = s.Gain
+	}
+	if !m.hasPendingChange(ctrlInputFreeze) {
+		m.InputFrozen = s.InputFrozen
+	}
+	if !m.hasPendingChange(ctrlInputFreezeLen) {
+		m.InputFreezeLength = s.InputFreezeLength
+	}
+	if !m.hasPendingChange(ctrlFilterAmount) {
+		m.FilterAmount = s.FilterAmount
+	}
+	if !m.hasPendingChange(ctrlFilterCutoff) {
+		m.FilterCutoff = s.FilterCutoff
+	}
+	if !m.hasPendingChange(ctrlFilterResonance) {
+		m.FilterResonance = s.FilterResonance
+	}
+	if !m.hasPendingChange(ctrlOverdriveDrive) {
+		m.OverdriveDrive = s.OverdriveDrive
+	}
+	if !m.hasPendingChange(ctrlOverdriveTone) {
+		m.OverdriveTone = s.OverdriveTone
+	}
+	if !m.hasPendingChange(ctrlOverdriveMix) {
+		m.OverdriveMix = s.OverdriveMix
+	}
+	if !m.hasPendingChange(ctrlGranularDensity) {
+		m.GranularDensity = s.GranularDensity
+	}
+	if !m.hasPendingChange(ctrlGranularSize) {
+		m.GranularSize = s.GranularSize
+	}
+	if !m.hasPendingChange(ctrlGranularPitchScatter) {
+		m.GranularPitchScatter = s.GranularPitchScatter
+	}
+	if !m.hasPendingChange(ctrlGranularPosScatter) {
+		m.GranularPosScatter = s.GranularPosScatter
+	}
+	if !m.hasPendingChange(ctrlGranularMix) {
+		m.GranularMix = s.GranularMix
+	}
+	if !m.hasPendingChange(ctrlGranularFreeze) {
+		m.GranularFrozen = s.GranularFrozen
+	}
+	// Note: GrainIntensity doesn't have a direct control mapping, so always update
 	m.GrainIntensity = s.GrainIntensity
-	m.ReverbDelayBlend = s.ReverbDelayBlend
-	m.DecayTime = s.DecayTime
-	m.ShimmerPitch = s.ShimmerPitch
-	m.DelayTime = s.DelayTime
-	m.ModRate = s.ModRate
-	m.ModDepth = s.ModDepth
-	m.ReverbDelayMix = s.ReverbDelayMix
-	m.BlendMode = s.BlendMode
-	m.DryWet = s.DryWet
+	if !m.hasPendingChange(ctrlReverbDelayBlend) {
+		m.ReverbDelayBlend = s.ReverbDelayBlend
+	}
+	if !m.hasPendingChange(ctrlDecayTime) {
+		m.DecayTime = s.DecayTime
+	}
+	if !m.hasPendingChange(ctrlShimmerPitch) {
+		m.ShimmerPitch = s.ShimmerPitch
+	}
+	if !m.hasPendingChange(ctrlDelayTime) {
+		m.DelayTime = s.DelayTime
+	}
+	if !m.hasPendingChange(ctrlModRate) {
+		m.ModRate = s.ModRate
+	}
+	if !m.hasPendingChange(ctrlModDepth) {
+		m.ModDepth = s.ModDepth
+	}
+	if !m.hasPendingChange(ctrlReverbDelayMix) {
+		m.ReverbDelayMix = s.ReverbDelayMix
+	}
+	if !m.hasPendingChange(ctrlBlendMode) {
+		m.BlendMode = s.BlendMode
+	}
+	if !m.hasPendingChange(ctrlDryWet) {
+		m.DryWet = s.DryWet
+	}
+
+	// Spectrum and connection status are always updated
 	m.Spectrum = s.Spectrum
 	m.connected = true
 }
@@ -157,4 +218,27 @@ func (m *Model) IsConnected() bool {
 
 func (m *Model) SetMidiPort(name string) {
 	m.midiPort = name
+}
+
+func (m *Model) markPendingChange(ctrl control) {
+	m.pendingChanges[ctrl] = time.Now()
+}
+
+func (m *Model) hasPendingChange(ctrl control) bool {
+	_, exists := m.pendingChanges[ctrl]
+	return exists
+}
+
+func (m *Model) clearPendingChange(ctrl control) {
+	delete(m.pendingChanges, ctrl)
+}
+
+func (m *Model) cleanupStalePendingChanges() {
+	// Remove pending changes older than 500ms
+	cutoff := time.Now().Add(-500 * time.Millisecond)
+	for ctrl, timestamp := range m.pendingChanges {
+		if timestamp.Before(cutoff) {
+			delete(m.pendingChanges, ctrl)
+		}
+	}
 }

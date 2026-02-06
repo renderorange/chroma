@@ -12,6 +12,7 @@
    - Never add git task types (e.g., "feat:", "fix:", "docs:", "test:", "chore:") to commit messages
    - Never use work-in-progress markers like "WIP:" or "TODO:" in commit messages
    - Commit messages should be clean, descriptive sentences focused on the change
+   - Start commit messages with capital letters (proper sentence capitalization)
 
 3. **Agent Skills Frameworks**: Ensure the following skills frameworks are installed and being used:
     - [superpowers](https://github.com/obra/superpowers)

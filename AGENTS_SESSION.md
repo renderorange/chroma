@@ -81,4 +81,20 @@ Chroma.start;
 - Update all documentation (README.md, CLAUDE.md, design docs) after any code changes
 
 ## Last Updated
-2026-02-06 (Spectrum visualizer implementation complete and tested)
+2026-02-06 (TUI-Server State Synchronization Fix implementation complete and committed)
+
+## Current Status
+
+**TUI-Server State Synchronization Fix - IMPLEMENTATION COMPLETE**
+
+Based on plan in `docs/plans/2026-02-06-state-sync-fix.md`:
+
+### Changes Made (COMMITTED):
+- Modified all 24 OSC handlers in Chroma.sc to call sendState(replyAddr) after parameter changes
+- Reduced pendingChanges timeout from 2 seconds to 500ms in chroma-tui/tui/model.go
+
+### Previous Status: Spectrum visualizer implementation COMPLETE and tested
+
+See `docs/plans/2026-02-06-spectrum-visualizer-status.md` for detailed status.
+
+### Recent Work: Spectrum Visualizer (Tasks 1-6) - ✅ COMPLETE
