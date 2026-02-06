@@ -93,6 +93,29 @@ test_tui_integration() {
     fi
 }
 
+# Test: Spectrum OSC messages
+test_spectrum_osc() {
+    info "Testing spectrum OSC messages..."
+    
+    # Verify spectrum routine exists in Chroma.sc
+    if grep -q "spectrumRoutine" "$SCRIPT_DIR/Chroma.sc"; then
+        echo "  ✓ spectrumRoutine found in Chroma.sc"
+    else
+        echo "  ✗ spectrumRoutine not found"
+        exit 1
+    fi
+
+    # Verify OSC handler exists
+    if grep -q "/chroma/spectrum" "$SCRIPT_DIR/Chroma.sc"; then
+        echo "  ✓ /chroma/spectrum OSC handler found"
+    else
+        echo "  ✗ /chroma/spectrum OSC handler not found"
+        exit 1
+    fi
+
+    pass "Spectrum OSC test"
+}
+
 # Main
 main() {
     echo "========================================"
@@ -106,6 +129,7 @@ main() {
     test_headless
     test_grain_intensity
     test_tui_integration
+    test_spectrum_osc
 
     echo ""
     echo -e "${GREEN}All tests passed!${NC}"

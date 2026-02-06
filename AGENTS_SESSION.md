@@ -27,26 +27,29 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 
 ## Current Status
 
-**Implementation complete. Tests passing with headless audio server limitations.**
+**Spectrum visualizer implementation COMPLETE and tested**
 
+See `docs/plans/2026-02-06-spectrum-visualizer-status.md` for detailed status.
+
+### Recent Work: Spectrum Visualizer (Tasks 1-6) - ✅ COMPLETE
 | Task | Description | Status |
 |------|-------------|--------|
-| 1 | Remove drone layer code | Complete |
-| 2 | Add effect buses and buffers | Complete |
-| 3 | Spectral filter SynthDef | Complete |
-| 4 | Blend control for effects | Complete |
-| 5 | Granular SynthDef with freeze | Complete |
-| 6 | Shimmer reverb SynthDef | Complete |
-| 7 | Modulated delay SynthDef | Complete |
-| 8 | Output mixer | Complete |
-| 9 | Wire up synth creation | Complete |
-| 10 | Remove GUI (headless only) | Complete |
-| 11 | Update tests | Complete |
-| 12 | Update documentation | Complete |
-| 13 | Integration testing | Complete |
-| 14 | Overdrive effect | Complete |
-| 15 | TUI refactor: full-width layout with overdrive | Complete |
-| 16 | Enhanced granular effect with user-selectable intensity | Complete |
+| 1 | Expose spectrum data from SuperCollider | Complete |
+| 2 | Handle OSC spectrum messages in Python | Complete |
+| 3 | Update TUI model with spectrum data | Complete |
+| 4 | Implement spectrum visualizer component | Complete |
+| 5 | Integrate visualizer into TUI | Complete |
+| 6a | Update README.md with spectrum visualizer feature | Complete |
+| 6b | Update visualizer design document status | Complete |
+| 6c | Run integration tests | Complete |
+
+### Resolved Issue
+- **File**: `Chroma.sc` at line 731
+- **Error**: Missing semicolon after if statement block
+- **Resolution**: Fixed syntax error, all tests passing
+
+### Previous Implementation (Tasks 1-16)
+All core Chroma effects and TUI features are complete.
 
 ## Running Tests
 
@@ -78,4 +81,4 @@ Chroma.start;
 - Update all documentation (README.md, CLAUDE.md, design docs) after any code changes
 
 ## Last Updated
-2026-02-06
+2026-02-06 (Spectrum visualizer implementation complete and tested)

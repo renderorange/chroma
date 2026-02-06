@@ -149,6 +149,14 @@ s.waitForBoot({
         instance.setGrainIntensity(\invalid);
         ("  - invalid mode falls back to subtle: " ++ instance.grainIntensity).postln;
 
+        "Testing spectrum data sending...".postln;
+        // Test spectrum routine exists and can be checked
+        if(instance.spectrumRoutine.notNil) {
+            "    ✓ Spectrum routine exists".postln;
+        } {
+            "    ✗ Spectrum routine not found".postln;
+        };
+
         "Testing output controls...".postln;
         instance.setDryWet(0.6);
         ("  - dryWet: " ++ instance.dryWet).postln;

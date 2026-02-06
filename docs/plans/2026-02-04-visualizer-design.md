@@ -188,4 +188,5 @@ require (
 
 ## Status
 
-- [ ] Implementation not started
+- [x] Implementation complete (2026-02-06)
+- Note: Approach changed from catnip to using SuperCollider's internal FFT data

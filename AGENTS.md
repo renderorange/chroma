@@ -24,10 +24,11 @@
    - Look for existing patterns and conventions in the codebase
 
 5. **Documentation Updates**: Always update project documentation to track progress:
-   - Update AGENTS.md when adding new general patterns or discovering issues
-   - Document any model limitations or compatibility problems
-   - Note successful workflows and command sequences
-   - Progress plans must be documented and updated into files in `docs/plans/`
+    - Update AGENTS.md when adding new general patterns or discovering issues
+    - Document any model limitations or compatibility problems
+    - Note successful workflows and command sequences
+    - Progress plans must be documented and updated into files in `docs/plans/`
+    - **Always keep AGENTS_SESSION.md current with the latest project status after any changes**
 
 ## Session Workflow
 

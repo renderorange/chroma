@@ -14,6 +14,12 @@ Chroma analyzes the spectral content of incoming audio and uses that analysis to
 - **Shimmer Reverb**: Pitch-shifted reverb for ethereal textures
 - **Modulated Delay**: Chorus-style delay with LFO modulation
 
+## Interface
+
+- **Terminal UI**: Full-width interface with real-time controls
+- **Spectrum Visualizer**: 8-band FFT analyzer showing input spectrum in real-time
+- **MIDI Support**: Map parameters to MIDI controller
+
 ## Requirements
 
 - SuperCollider 3.10+

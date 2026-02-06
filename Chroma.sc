@@ -727,7 +727,7 @@ Chroma {
         if(spectrumRoutine.notNil) {
             spectrumRoutine.stop;
             spectrumRoutine = nil;
-        }
+        };
         this.cleanupOSC;
         synths.do(_.free);
         buses.do(_.free);
