@@ -21,6 +21,8 @@ Chroma {
     var <inputGain;
     var <>grainIntensity = \subtle;
     var <grainIntensityMultipliers;  // Dictionary for intensity multiplier constants
+    var spectrumRoutine;  // Routine for sending spectrum data
+    var spectrumUpdateRate = 0.033;  // ~30fps (33ms)
 
     *new { |server|
         ^super.new.init(server);
@@ -721,6 +723,11 @@ Chroma {
     }
 
     cleanup {
+        // Stop spectrum routine
+        if(spectrumRoutine.notNil) {
+            spectrumRoutine.stop;
+            spectrumRoutine = nil;
+        }
         this.cleanupOSC;
         synths.do(_.free);
         buses.do(_.free);
@@ -783,6 +790,14 @@ Chroma {
             this.sendState(replyAddr);
         }, '/chroma/sync');
 
+        // Start spectrum data routine
+        spectrumRoutine = Routine {
+            loop {
+                this.sendSpectrum(replyAddr);
+                spectrumUpdateRate.wait;
+            }
+        }.play;
+
         "Chroma OSC responders ready".postln;
     }
 
@@ -816,7 +831,20 @@ Chroma {
         );
     }
 
+    sendSpectrum { |addr|
+        var bandData;
+        if(buses.notNil and: { buses[\bands].notNil }) {
+            bandData = buses[\bands].getnSynchronous(8);
+            addr.sendMsg('/chroma/spectrum', *bandData);
+        }
+    }
+
     cleanupOSC {
+        // Stop spectrum routine
+        if(spectrumRoutine.notNil) {
+            spectrumRoutine.stop;
+            spectrumRoutine = nil;
+        }
         OSCdef(\chromaGain).free;
         OSCdef(\chromaInputFreeze).free;
         OSCdef(\chromaInputFreezeLength).free;
