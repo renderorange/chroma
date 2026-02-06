@@ -48,6 +48,14 @@ func (m Model) View() string {
 
 	var sections []string
 
+	// Visualizer at top (if connected)
+	if m.connected {
+		vis := m.renderVisualizer(width)
+		if vis != "" {
+			sections = append(sections, vis)
+		}
+	}
+
 	sections = append(sections, m.renderSection("INPUT", width, m.renderInputControls))
 	sections = append(sections, m.renderSection("FILTER", width, m.renderFilterControls))
 	sections = append(sections, m.renderSection("OVERDRIVE", width, m.renderOverdriveControls))

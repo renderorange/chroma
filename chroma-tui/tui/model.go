@@ -70,6 +70,9 @@ type Model struct {
 	width     int
 	height    int
 
+	// Visualizer state
+	Spectrum [8]float32
+
 	// OSC
 	client *osc.Client
 }
@@ -132,6 +135,7 @@ func (m *Model) ApplyState(s osc.State) {
 	m.ReverbDelayMix = s.ReverbDelayMix
 	m.BlendMode = s.BlendMode
 	m.DryWet = s.DryWet
+	m.Spectrum = s.Spectrum
 	m.connected = true
 }
 
