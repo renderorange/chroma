@@ -82,7 +82,9 @@ func NewServer(port int) *Server {
 				DryWet:               toFloat32(msg.Arguments[24]),
 			}
 			s.stateMu.Lock()
+			existingSpectrum := s.currentState.Spectrum
 			s.currentState = state
+			s.currentState.Spectrum = existingSpectrum
 			s.stateMu.Unlock()
 			// Non-blocking send
 			select {
