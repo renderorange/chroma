@@ -40,10 +40,10 @@ func TestTUISuperCollider_CompleteWorkflow(t *testing.T) {
 
 	// Phase 3: TUI receives updated state from SuperCollider
 	updatedState := osc.State{
-		Gain:         expectedGain,   // Echo back user's gain
-		FilterCutoff: expectedCutoff, // Echo back user's cutoff
-		FilterAmount: 0.8,            // New value from SC processing
-		Overdrive:    true,           // New value from SC processing
+		Gain:           expectedGain,   // Echo back user's gain
+		FilterCutoff:   expectedCutoff, // Echo back user's cutoff
+		FilterAmount:   0.8,            // New value from SC processing
+		OverdriveDrive: 0.7,            // New value from SC processing
 	}
 
 	model.ApplyState(updatedState)
@@ -58,8 +58,8 @@ func TestTUISuperCollider_CompleteWorkflow(t *testing.T) {
 	if model.FilterAmount != 0.8 {
 		t.Errorf("Filter amount not updated from SC: expected 0.8, got %f", model.FilterAmount)
 	}
-	if !model.Overdrive {
-		t.Errorf("Overdrive not updated from SC: expected true, got false", model.Overdrive)
+	if model.OverdriveDrive != 0.7 {
+		t.Errorf("Overdrive drive not updated from SC: expected 0.7, got %f", model.OverdriveDrive)
 	}
 
 	t.Log("Complete TUI ↔ SuperCollider workflow verified")
@@ -81,7 +81,7 @@ func TestTUISuperCollider_ParameterPersistence(t *testing.T) {
 	updates := []osc.State{
 		{Gain: initialGain, FilterCutoff: initialCutoff, FilterAmount: 0.5},
 		{Gain: initialGain, FilterCutoff: initialCutoff, FilterAmount: 0.7},
-		{Gain: initialGain, FilterCutoff: initialCutoff, Overdrive: true},
+		{Gain: initialGain, FilterCutoff: initialCutoff, OverdriveDrive: 0.8},
 		{Gain: initialGain, FilterCutoff: initialCutoff, BlendMode: 2},
 	}
 
@@ -108,14 +108,14 @@ func TestTUISuperCollider_AudioParameterFeedback(t *testing.T) {
 
 	// Initial state
 	model.Gain = 1.0
-	model.Overdrive = false
+	model.OverdriveDrive = 0.0
 
 	// Simulate audio-driven parameter changes from SuperCollider
 	// (e.g., automatic gain adjustment based on input level)
 	audioDrivenStates := []osc.State{
-		{Gain: 1.1, FilterAmount: 0.3}, // Audio analysis suggests more gain
-		{Gain: 1.2, FilterAmount: 0.5}, // Dynamic processing increases parameters
-		{Gain: 1.15, Overdrive: true},  // Overdrive kicks in based on signal
+		{Gain: 1.1, FilterAmount: 0.3},    // Audio analysis suggests more gain
+		{Gain: 1.2, FilterAmount: 0.5},    // Dynamic processing increases parameters
+		{Gain: 1.15, OverdriveDrive: 0.9}, // Overdrive kicks in based on signal
 	}
 
 	for i, state := range audioDrivenStates {
@@ -190,10 +190,10 @@ func TestTUISuperCollider_ErrorHandling(t *testing.T) {
 		}()
 	}()
 
-	// Wait a bit for server to start
-	time.Sleep(50 * time.Millisecond)
+	// Wait a bit for server to start and for pending changes to expire
+	time.Sleep(550 * time.Millisecond)
 
-	// Now parameters should sync
+	// Now parameters should sync (pending change protection expired)
 	recoveryState := osc.State{Gain: 1.5, FilterAmount: 0.8}
 	model.ApplyState(recoveryState)
 
