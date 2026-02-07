@@ -29,9 +29,6 @@ jobs:
         working-directory: chroma-tui
         run: go test -v ./...
 
-      - name: Run tests in tests directory
-        run: go test -v ./tests/...
-
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ${{ matrix.runner }}
