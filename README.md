@@ -162,6 +162,40 @@ Audio Input -> Input Freeze -> FFT Analysis -> Feature Extraction -> Control Bus
                 Mod Delay <-------------------------------------------> Output Mixer
 ```
 
+## Testing
+
+Chroma includes several test suites to verify functionality:
+
+### SuperCollider Tests
+
+**Basic Compilation Test:**
+```bash
+./test_compilation.sh
+```
+Validates SuperCollider class syntax and structure.
+
+**Headless Mode Test:**
+```bash
+./test_headless.sh
+```
+Tests Chroma startup and shutdown in headless mode without audio interface.
+
+**SynthDef Tests:**
+```bash
+sclang test_synths.scd
+```
+Comprehensive test of all synth functionality, effects, and controls.
+Requires display/X11 for GUI components.
+
+### Go Integration Tests
+
+**TUI OSC Communication:**
+```bash
+cd chroma-tui && go test ./tests/integration/... -v
+```
+
+**Note:** Go tests may require dependency management setup due to module path issues.
+
 ## License and Copyright
 
 `Chroma` is Copyright (c) 2026 Blaine Motsinger under the MIT license.

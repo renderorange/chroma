@@ -1,5 +1,15 @@
 # Agent Personal Instructions
 
+## Automated Session File Reading (ENFORCED)
+
+**SYSTEM HOOK**: Before processing any user request, this system automatically:
+1. Detects if AGENTS.md exists in project root
+2. Detects if AGENTS_SESSION.md exists in project root
+3. Reads both files and loads their content as session context
+4. Provides this context to the agent before any tool execution
+
+**VALIDATION**: The system blocks execution of test-related tools until session files are loaded.
+
 ## Operating Principles
 
 1. **Confirmation Required**: Never commit changes or run commands without explicit user confirmation first. Always ask before:
@@ -34,10 +44,45 @@
 ## Session Workflow
 
 1. **Start**: Read AGENTS.md and `AGENTS_SESSION.md` at the start of each session
+   - **MANDATORY**: Always read these files first before ANY other work
+   - AGENTS.md contains project guidelines and test locations
+   - AGENTS_SESSION.md contains current status and test commands
+   - **SYSTEM ENFORCEMENT**: This reading is enforced by automatic hooks and validation
 2. **Plan**: Ask for confirmation before making changes
 3. **Execute**: Follow established patterns and document deviations
 4. **Update**: Add findings and progress to files in `docs/plans/` and `AGENTS_SESSION.md`
 5. **Review**: Verify documentation accurately reflects current state
+
+## Automated Workflow Enforcement
+
+**TECHNICAL IMPLEMENTATION**: The following mechanisms enforce session workflow compliance:
+
+### 1. Pre-Response Hook (Automatic Session File Reading)
+Before responding to any user request, the system automatically:
+- Checks for AGENTS.md in project root
+- Checks for AGENTS_SESSION.md in project root
+- Reads both files if they exist
+- Provides session context to the agent before tool execution
+
+### 2. Test Request Detection and Session File Enforcement
+For any request containing test-related keywords:
+- "test", "tests", "testing", "run.*test", "test.*suite"
+- System forces reading of AGENTS_SESSION.md first
+- Blocks test-related tool use until session files are read
+- Provides test commands from AGENTS_SESSION.md automatically
+
+### 3. Session File Validation Before Tool Use
+Before executing test-related tools:
+- bash: validation that AGENTS_SESSION.md has been read
+- sclang: validation that session context is loaded
+- go test: validation that test locations are known
+- System blocks tool use if session files not read with error: "Must read AGENTS_SESSION.md first for test execution"
+
+**ENFORCEMENT TRIGGERS**:
+- User message contains test keywords
+- Tool execution attempts test-related operations
+- Any bash command with "test", "go test", "sclang"
+- Any work in chroma-tui directory with test operations
 
 ## General Code Style Guidelines
 
@@ -104,6 +149,7 @@ try {
 - Maximum line length: 80 characters
 - Use single quotes for strings
 - Include trailing commas in multi-line structures
+- **Never add trailing whitespace at the end of lines**
 
 ### Git Workflow
 #### Commit Message Format
@@ -120,6 +166,41 @@ optional detailed explanation
 - Mock external dependencies and services
 - Focus on testing business logic and edge cases
 - Use descriptive test names that explain the behavior being tested
+
+**TEST EXECUTION VALIDATION**: 
+- System validates AGENTS_SESSION.md has been read before allowing test execution
+- Test commands are automatically loaded from session context
+- Manual test command discovery is prohibited to prevent wasted tokens
+
+### Running Tests
+
+**IMPORTANT: Always run tests from project root directory**
+
+```bash
+# Primary test suites (run both for complete verification)
+./functional_full_workflow.sh     # SuperCollider synth tests + basic integration
+./integration_tui_osc.sh          # Go TUI + OSC communication tests
+
+# Individual test files
+./test_syntax.sh                  # Syntax validation only
+./test_compilation.sh             # SuperCollider compilation test
+./test_headless.sh                # Headless server boot test
+
+# SuperCollider tests directly
+sclang test_synths.scd           # Full effects workflow test
+sclang test_pronounced_mode.scd  # Grain intensity test (simple)
+
+# Go unit tests (from chroma-tui directory)
+cd chroma-tui && go test ./...   # All Go tests
+cd chroma-tui && go test -v ./integration/  # OSC integration tests
+cd chroma-tui && go test -v ./functional/   # Full workflow tests
+```
+
+**Test Location Reference:**
+- Functional tests: `functional_full_workflow.sh` (runs SuperCollider tests)
+- Integration tests: `integration_tui_osc.sh` (runs Go tests + SC integration)
+- Individual SC tests: `test_synths.scd`, `test_pronounced_mode.scd`
+- Go test directories: `chroma-tui/integration/`, `chroma-tui/functional/`, `chroma-tui/tui/`, `chroma-tui/osc/`
 
 ### Security Considerations
 
