@@ -7,7 +7,7 @@ import (
 	"github.com/renderorange/chroma/chroma-tui/osc"
 )
 
-func TestModelRaceCondition_ControlReverted(t *testing.T) {
+func TestTUIModel_ConcurrentUpdatePreservesUserChanges(t *testing.T) {
 	// Create a model with real client (to avoid nil pointer)
 	client := osc.NewClient("127.0.0.1", 57120)
 	model := NewModel(client)
@@ -39,7 +39,7 @@ func TestModelRaceCondition_ControlReverted(t *testing.T) {
 	}
 }
 
-func TestModelPendingChanges_ControlNotReverted(t *testing.T) {
+func TestTUIModel_PendingChangePreventsOverwrite(t *testing.T) {
 	// This test shows what SHOULD happen after implementing the fix
 	client := osc.NewClient("127.0.0.1", 57120)
 	model := NewModel(client)
@@ -66,7 +66,7 @@ func TestModelPendingChanges_ControlNotReverted(t *testing.T) {
 	}
 }
 
-func TestModelMultiplePendingChanges(t *testing.T) {
+func TestTUIModel_MultipleConcurrentChanges(t *testing.T) {
 	client := osc.NewClient("127.0.0.1", 57120)
 	model := NewModel(client)
 
@@ -103,7 +103,7 @@ func TestModelMultiplePendingChanges(t *testing.T) {
 	}
 }
 
-func TestModelStalePendingChangesCleanup(t *testing.T) {
+func TestTUIModel_StalePendingChangeCleanup(t *testing.T) {
 	client := osc.NewClient("127.0.0.1", 57120)
 	model := NewModel(client)
 
@@ -128,7 +128,7 @@ func TestModelStalePendingChangesCleanup(t *testing.T) {
 	}
 }
 
-func TestModelNonPendingControlsUpdated(t *testing.T) {
+func TestTUIModel_NonPendingControlsUpdated(t *testing.T) {
 	client := osc.NewClient("127.0.0.1", 57120)
 	model := NewModel(client)
 
@@ -162,7 +162,7 @@ func TestModelNonPendingControlsUpdated(t *testing.T) {
 	}
 }
 
-func TestModelToggleControlsPendingChanges(t *testing.T) {
+func TestTUIModel_ToggleControlsWithPendingChanges(t *testing.T) {
 	client := osc.NewClient("127.0.0.1", 57120)
 	model := NewModel(client)
 

@@ -25,9 +25,12 @@ jobs:
           go-version: '1.22'
           cache-dependency-path: chroma-tui/go.sum
 
-      - name: Run tests
+      - name: Run tests in chroma-tui
         working-directory: chroma-tui
         run: go test -v ./...
+
+      - name: Run tests in tests directory
+        run: go test -v ./tests/...
 
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}

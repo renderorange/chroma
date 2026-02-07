@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestNewClient(t *testing.T) {
+func TestOSCClient_CreationWithValidHostAndPort(t *testing.T) {
 	c := NewClient("127.0.0.1", 57120)
 	if c == nil {
 		t.Fatal("expected non-nil client")
@@ -14,7 +14,7 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestBoolToInt(t *testing.T) {
+func TestOSCClient_BoolToIntConversion(t *testing.T) {
 	if boolToInt(true) != 1 {
 		t.Error("expected true to be 1")
 	}

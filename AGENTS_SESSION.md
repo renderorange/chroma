@@ -14,7 +14,8 @@ Spectral-reactive effects processor in SuperCollider. Analyzes input audio spect
 | `run.sh` | Launcher with audio device selection |
 | `startup.scd` | Boot script with server options |
 | `test_synths.scd` | Headless synth test (sclang) |
-| `test_integration.sh` | Integration test suite (bash) |
+| `functional_full_workflow.sh` | Full workflow integration tests (bash) |
+| `integration_tui_osc.sh` | TUI-OSC integration tests (bash) |
 | `README.md` | User documentation |
 | `docs/plans/2026-02-03-chroma-effects-design.md` | Effects pedal design specification |
 | `docs/plans/2026-02-03-chroma-effects-implementation.md` | Effects implementation plan |
@@ -54,8 +55,11 @@ All core Chroma effects and TUI features are complete.
 ## Running Tests
 
 ```bash
-# Run integration tests
-./test_integration.sh
+# Run full workflow integration tests
+./functional_full_workflow.sh
+
+# Run TUI-OSC integration tests
+./integration_tui_osc.sh
 
 # Or run SuperCollider tests directly
 sclang test_synths.scd
@@ -81,11 +85,22 @@ Chroma.start;
 - Update all documentation (README.md, CLAUDE.md, design docs) after any code changes
 
 ## Last Updated
-2026-02-06 (TUI-Server State Synchronization Fix implementation complete and committed)
+2026-02-07 (Test Structure Reorganization COMPLETE)
 
 ## Current Status
 
-**TUI-Server State Synchronization Fix - IMPLEMENTATION COMPLETE**
+**Test Structure Reorganization - IMPLEMENTATION COMPLETE**
+
+Based on plan in `docs/plans/2026-02-07-test-structure-reorganization.md`:
+
+### Changes Made (COMPLETED):
+- ✅ Updated all test function names to follow consistent naming convention
+- ✅ Renamed integration test files: `settings_bug_fix_test.go` → `parameter_sync_test.go`
+- ✅ Created `chroma-tui/functional/` directory with comprehensive workflow tests
+- ✅ Updated shell scripts: `test_integration.sh` → `functional_full_workflow.sh`, `test_real_integration.sh` → `integration_tui_osc.sh`
+- ✅ Updated all test commands to use new naming convention
+
+### Previous Status: TUI-Server State Synchronization Fix - IMPLEMENTATION COMPLETE
 
 Based on plan in `docs/plans/2026-02-06-state-sync-fix.md`:
 

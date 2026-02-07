@@ -64,66 +64,87 @@ func (m *Model) adjustFocused(delta float32) {
 	switch m.focused {
 	case ctrlGain:
 		m.Gain = clamp(m.Gain+delta*2, 0, 2)
+		m.markPendingChange(m.focused)
 		m.client.SetGain(m.Gain)
 	case ctrlInputFreezeLen:
 		m.InputFreezeLength = clamp(m.InputFreezeLength+delta*0.45, 0.05, 0.5)
+		m.markPendingChange(m.focused)
 		m.client.SetInputFreezeLength(m.InputFreezeLength)
 	case ctrlFilterAmount:
 		m.FilterAmount = clamp(m.FilterAmount+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetFilterAmount(m.FilterAmount)
 	case ctrlFilterCutoff:
 		m.FilterCutoff = clamp(m.FilterCutoff+delta*7800, 200, 8000)
+		m.markPendingChange(m.focused)
 		m.client.SetFilterCutoff(m.FilterCutoff)
 	case ctrlFilterResonance:
 		m.FilterResonance = clamp(m.FilterResonance+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetFilterResonance(m.FilterResonance)
 	case ctrlOverdriveDrive:
 		m.OverdriveDrive = clamp(m.OverdriveDrive+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetOverdriveDrive(m.OverdriveDrive)
 	case ctrlOverdriveTone:
 		m.OverdriveTone = clamp(m.OverdriveTone+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetOverdriveTone(m.OverdriveTone)
 	case ctrlOverdriveMix:
 		m.OverdriveMix = clamp(m.OverdriveMix+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetOverdriveMix(m.OverdriveMix)
 	case ctrlGranularDensity:
 		m.GranularDensity = clamp(m.GranularDensity+delta*49, 1, 50)
+		m.markPendingChange(m.focused)
 		m.client.SetGranularDensity(m.GranularDensity)
 	case ctrlGranularSize:
 		m.GranularSize = clamp(m.GranularSize+delta*0.49, 0.01, 0.5)
+		m.markPendingChange(m.focused)
 		m.client.SetGranularSize(m.GranularSize)
 	case ctrlGranularPitchScatter:
 		m.GranularPitchScatter = clamp(m.GranularPitchScatter+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetGranularPitchScatter(m.GranularPitchScatter)
 	case ctrlGranularPosScatter:
 		m.GranularPosScatter = clamp(m.GranularPosScatter+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetGranularPosScatter(m.GranularPosScatter)
 	case ctrlGranularMix:
 		m.GranularMix = clamp(m.GranularMix+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetGranularMix(m.GranularMix)
 	case ctrlReverbDelayBlend:
 		m.ReverbDelayBlend = clamp(m.ReverbDelayBlend+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetReverbDelayBlend(m.ReverbDelayBlend)
 	case ctrlDecayTime:
 		m.DecayTime = clamp(m.DecayTime+delta*9.9, 0.1, 10)
+		m.markPendingChange(m.focused)
 		m.client.SetDecayTime(m.DecayTime)
 	case ctrlShimmerPitch:
 		m.ShimmerPitch = clamp(m.ShimmerPitch+delta*24, 0, 24)
+		m.markPendingChange(m.focused)
 		m.client.SetShimmerPitch(m.ShimmerPitch)
 	case ctrlDelayTime:
 		m.DelayTime = clamp(m.DelayTime+delta*0.99, 0.01, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetDelayTime(m.DelayTime)
 	case ctrlModRate:
 		m.ModRate = clamp(m.ModRate+delta*9.9, 0.1, 10)
+		m.markPendingChange(m.focused)
 		m.client.SetModRate(m.ModRate)
 	case ctrlModDepth:
 		m.ModDepth = clamp(m.ModDepth+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetModDepth(m.ModDepth)
 	case ctrlReverbDelayMix:
 		m.ReverbDelayMix = clamp(m.ReverbDelayMix+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetReverbDelayMix(m.ReverbDelayMix)
 	case ctrlDryWet:
 		m.DryWet = clamp(m.DryWet+delta, 0, 1)
+		m.markPendingChange(m.focused)
 		m.client.SetDryWet(m.DryWet)
 	}
 }
@@ -132,15 +153,18 @@ func (m *Model) toggleFocused() {
 	switch m.focused {
 	case ctrlInputFreeze:
 		m.InputFrozen = !m.InputFrozen
+		m.markPendingChange(m.focused)
 		m.client.SetInputFreeze(m.InputFrozen)
 	case ctrlGranularFreeze:
 		m.GranularFrozen = !m.GranularFrozen
+		m.markPendingChange(m.focused)
 		m.client.SetGranularFreeze(m.GranularFrozen)
 	}
 }
 
 func (m *Model) setBlendMode(mode int) {
 	m.BlendMode = mode
+	m.markPendingChange(ctrlBlendMode)
 	m.client.SetBlendMode(mode)
 }
 
@@ -150,6 +174,7 @@ func (m *Model) toggleGrainIntensity() {
 	} else {
 		m.GrainIntensity = "subtle"
 	}
+	// Note: GrainIntensity doesn't have a control mapping, so no markPendingChange
 	m.client.SetGrainIntensity(m.GrainIntensity)
 }
 
