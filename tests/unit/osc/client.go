@@ -89,7 +89,7 @@ func (c *Client) Send(path string, args ...interface{}) error {
 }
 
 func (c *Client) SetGrainIntensity(intensity string) error {
-	return c.Send("/chroma", "grainIntensity", intensity)
+	return c.Send("/chroma/grainIntensity", intensity)
 }
 
 func boolToInt(b bool) int32 {

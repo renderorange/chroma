@@ -69,9 +69,11 @@ test_grain_intensity() {
     fi
 
     # Test pronounced mode  
-    output=$(timeout 10 sclang -c "Chroma.start; Chroma.instance.setGrainIntensity(\pronounced); 1.wait; Chroma.stop;" 2>&1) || true
+    output=$(timeout 10 sclang test_pronounced_mode.scd 2>&1) || true
     
-    if echo "$output" | grep -q -i "error\|exception\|failed"; then
+    if echo "$output" | grep -q "✓ Grain intensity set to: pronounced"; then
+        pass "Grain intensity pronounced mode test successful"
+    else
         echo "$output"
         fail "Grain intensity pronounced mode test failed"
     fi
