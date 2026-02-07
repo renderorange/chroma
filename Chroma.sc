@@ -17,7 +17,9 @@ Chroma {
     var <filterParams;
     var <overdriveParams;
     var <granularParams;
-    var <reverbDelayParams;
+    var <reverbParams;
+    var <delayParams;
+    var <bitcrushParams;
     var <inputGain;
     var <>grainIntensity = \subtle;
     var <grainIntensityMultipliers;  // Dictionary for intensity multiplier constants
@@ -47,7 +49,8 @@ Chroma {
         inputGain = 1.0;
         grainIntensityMultipliers = (
             subtle: 1.0,        // Normal granular effect intensity
-            pronounced: 3.0     // 3x intensity based on perceptual testing for pronounced grain effect
+            pronounced: 3.0,    // 3x intensity based on perceptual testing for pronounced grain effect
+            extreme: 6.0         // 6x intensity for extreme granular effect
         );
         filterParams = (
             amount: 0.5,
@@ -66,13 +69,24 @@ Chroma {
             posScatter: 0.3,
             mix: 0.5
         );
-        reverbDelayParams = (
-            blend: 0.5,
+        reverbParams = (
+            enabled: false,
             decayTime: 3,
-            shimmerPitch: 12,
+            mix: 0.3
+        );
+        delayParams = (
+            enabled: false,
             delayTime: 0.3,
+            decayTime: 3,
             modRate: 0.5,
             modDepth: 0.3,
+            mix: 0.3
+        );
+        bitcrushParams = (
+            enabled: false,
+            bitDepth: 8,
+            sampleRate: 11025,
+            drive: 0.5,
             mix: 0.3
         );
         ^this;
@@ -128,6 +142,7 @@ Chroma {
         // Effect audio buses
         buses[\filteredAudio] = Bus.audio(server, 1);
         buses[\overdriveAudio] = Bus.audio(server, 1);
+        buses[\bitcrushAudio] = Bus.audio(server, 1);
         buses[\granularAudio] = Bus.audio(server, 1);
         buses[\reverbAudio] = Bus.audio(server, 1);
         buses[\delayAudio] = Bus.audio(server, 1);
@@ -136,7 +151,6 @@ Chroma {
         buses[\filterGains] = Bus.control(server, 8);
         buses[\overdriveCtrl] = Bus.control(server, 2);  // drive, tone
         buses[\granularCtrl] = Bus.control(server, 4);  // density, size, pitchScatter, posScatter
-        buses[\reverbDelayCtrl] = Bus.control(server, 4);  // blend, decay, modRate, modDepth
 
         // Grain buffers (2 seconds at server sample rate)
         grainBuffer = Buffer.alloc(server, server.sampleRate * 2, 1);
@@ -156,8 +170,9 @@ Chroma {
         this.loadBlendControlSynthDef;
         this.loadFilterSynthDef;
         this.loadOverdriveSynthDef;
+        this.loadBitcrushSynthDef;
         this.loadGranularSynthDef;
-        this.loadShimmerReverbSynthDef;
+        this.loadReverbSynthDef;
         this.loadModDelaySynthDef;
         this.loadOutputSynthDef;
     }
@@ -254,17 +269,16 @@ Chroma {
 
     loadBlendControlSynthDef {
         SynthDef(\chroma_blend, { |mode=0, bandsBus, centroidBus, spreadBus, flatnessBus,
-            filterGainsBus, overdriveCtrlBus, granularCtrlBus, reverbDelayCtrlBus,
+            filterGainsBus, overdriveCtrlBus, granularCtrlBus,
             baseFilterAmount=0.5, baseOverdriveDrive=0.5, baseOverdriveTone=0.7,
             baseGrainDensity=10, baseGrainSize=0.1,
             basePitchScatter=0.1, basePosScatter=0.2,
-            baseReverbDelayBlend=0.5, baseDecayTime=3, baseModRate=0.5, baseModDepth=0.3,
             grainIntensityMultiplier=1.0|
 
             var bands, centroid, spread, flatness;
             var filterGains, overdriveDrive, overdriveTone;
             var grainDensity, grainSize, pitchScatter, posScatter;
-            var reverbDelayBlend, decayTime, modRate, modDepth;
+            var extremeFactor;
 
             bands = In.kr(bandsBus, 8);
             centroid = In.kr(centroidBus);
@@ -337,41 +351,16 @@ Chroma {
                 spread.linlin(0, 1, 0.05, basePosScatter * 2)
             ]);
 
-            // Reverb/Delay parameters
-            reverbDelayBlend = Select.kr(mode, [
-                // Mirror: bright = more shimmer (reverb)
-                centroid.linlin(0, 1, 0.7, 0.0),
-                // Complement: bright = more delay
-                centroid.linlin(0, 1, 0.0, 1.0),
-                // Transform: flatness controls
-                flatness.linlin(0, 1, 0.2, 0.8)
-            ]);
-
-            decayTime = Select.kr(mode, [
-                // Mirror: spread = longer decay
-                spread.linlin(0, 1, baseDecayTime * 0.5, baseDecayTime * 2),
-                // Complement: spread = shorter decay
-                spread.linlin(0, 1, baseDecayTime * 2, baseDecayTime * 0.5),
-                // Transform: centroid controls
-                centroid.linlin(0, 1, baseDecayTime * 0.5, baseDecayTime * 1.5)
-            ]);
-
-            modRate = Select.kr(mode, [
-                baseModRate,
-                baseModRate,
-                centroid.linlin(0, 1, baseModRate * 0.5, baseModRate * 2)
-            ]);
-
-            modDepth = Select.kr(mode, [
-                baseModDepth,
-                baseModDepth,
-                spread.linlin(0, 1, baseModDepth * 0.5, baseModDepth * 2)
-            ]);
+            // Enhanced granular parameters for extreme mode
+            // Use smooth scaling instead of hard threshold
+            extremeFactor = grainIntensityMultiplier.linlin(1.0, 6.0, 1.0, 2.0).clip(1.0, 2.0);
+            grainDensity = grainDensity * extremeFactor;  // Extra density for extreme
+            grainSize = grainSize * grainIntensityMultiplier.linlin(1.0, 6.0, 1.0, 1.5).clip(1.0, 1.5);       // Larger size variation
+            pitchScatter = pitchScatter * grainIntensityMultiplier.linlin(1.0, 6.0, 1.0, 1.33).clip(1.0, 1.33); // More pitch variation
 
             Out.kr(filterGainsBus, filterGains.lag(0.1));
             Out.kr(overdriveCtrlBus, [overdriveDrive, overdriveTone].clip(0, 1).lag(0.1));
             Out.kr(granularCtrlBus, [grainDensity, grainSize, pitchScatter, posScatter].lag(0.1));
-            Out.kr(reverbDelayCtrlBus, [reverbDelayBlend, decayTime, modRate, modDepth].lag(0.1));
         }).add;
     }
 
@@ -495,18 +484,41 @@ Chroma {
         }).add;
     }
 
-    loadShimmerReverbSynthDef {
-        SynthDef(\chroma_shimmer_reverb, { |inBus, outBus, decayTime=3, shimmerPitch=12, mix=0.3|
-            var sig, dry, wet, shifted, verb;
-            var pitchRatio;
+    loadBitcrushSynthDef {
+        SynthDef(\chroma_bitcrush, { |inBus, outBus, bitDepth=8, sampleRate=11025, drive=0.5, mix=0.3|
+            var sig, dry, wet, crushed, driven;
+            var rateDivisor, quantization;
 
             sig = In.ar(inBus);
             dry = sig;
 
-            // Pitch ratio from semitones
-            pitchRatio = shimmerPitch.midiratio;
+            // Sample rate reduction
+            rateDivisor = SampleRate.ir / sampleRate;
+            crushed = Latch.ar(sig, Impulse.ar(sampleRate));
 
-            // Create shimmer through pitch-shifted feedback
+            // Bit depth reduction
+            quantization = (2.pow(bitDepth) - 1) / 2;
+            crushed = (crushed * quantization).round / quantization;
+
+            // Drive/distortion
+            driven = (crushed * (1 + drive * 19)).tanh;
+            driven = driven * (1 - drive * 0.3);  // Compensate gain
+
+            // Mix dry and wet
+            sig = XFade2.ar(dry, driven, mix.linlin(0, 1, -1, 1));
+
+            Out.ar(outBus, sig);
+        }).add;
+    }
+
+    loadReverbSynthDef {
+        SynthDef(\chroma_reverb, { |inBus, outBus, decayTime=3, mix=0.3|
+            var sig, dry, wet, verb;
+
+            sig = In.ar(inBus);
+            dry = sig;
+
+            // Create reverb with diffusion network
             verb = sig;
             verb = verb + LocalIn.ar(1);
 
@@ -515,17 +527,12 @@ Chroma {
                 verb = AllpassC.ar(verb, 0.05, { Rand(0.01, 0.05) }.dup(1).sum, decayTime * 0.3);
             };
 
-            // Pitch shift in feedback path
-            shifted = PitchShift.ar(verb, 0.2, pitchRatio, 0.01, 0.01) * 0.4;
+            LocalOut.ar(verb * (decayTime / 10).clip(0, 0.8));
 
-            // High-frequency damping
-            shifted = LPF.ar(shifted, 6000);
-
-            LocalOut.ar(shifted * (decayTime / 10).clip(0, 0.8));
-
-            // Final reverb tail
+            // Final reverb tail using FreeVerb
             wet = FreeVerb.ar(verb, 0.8, decayTime.linlin(0.5, 10, 0.5, 0.95), 0.5);
 
+            // Mix dry and wet
             sig = (dry * (1 - mix)) + (wet * mix);
 
             Out.ar(outBus, sig);
@@ -574,20 +581,17 @@ Chroma {
 
     loadOutputSynthDef {
         SynthDef(\chroma_output, { |inBus, granularBus, reverbBus, delayBus,
-            reverbDelayBlend=0.5, dryWet=0.5, outBus=0|
+            dryWet=0.5, outBus=0|
 
-            var dry, granular, reverb, delay, reverbDelay, wet, sig;
+            var dry, granular, reverb, delay, wet, sig;
 
             dry = In.ar(inBus);
             granular = In.ar(granularBus);
             reverb = In.ar(reverbBus);
             delay = In.ar(delayBus);
 
-            // Crossfade between reverb and delay
-            reverbDelay = XFade2.ar(reverb, delay, reverbDelayBlend * 2 - 1);
-
-            // Mix granular and reverb/delay (equal blend for now)
-            wet = (granular + reverbDelay) * 0.5;
+            // Mix all effects (reverb and delay are already gated by their mix controls)
+            wet = granular + reverb + delay;
 
             // Final dry/wet mix
             sig = XFade2.ar(dry, wet, dryWet * 2 - 1);
@@ -642,7 +646,6 @@ Chroma {
             \filterGainsBus, buses[\filterGains],
             \overdriveCtrlBus, buses[\overdriveCtrl],
             \granularCtrlBus, buses[\granularCtrl],
-            \reverbDelayCtrlBus, buses[\reverbDelayCtrl],
             \baseFilterAmount, filterParams[\amount],
             \baseOverdriveDrive, overdriveParams[\drive],
             \baseOverdriveTone, overdriveParams[\tone],
@@ -650,11 +653,7 @@ Chroma {
             \baseGrainSize, granularParams[\size],
             \basePitchScatter, granularParams[\pitchScatter],
             \basePosScatter, granularParams[\posScatter],
-            \baseReverbDelayBlend, reverbDelayParams[\blend],
-            \baseDecayTime, reverbDelayParams[\decayTime],
-            \baseModRate, reverbDelayParams[\modRate],
-            \baseModDepth, reverbDelayParams[\modDepth],
-            \grainIntensityMultiplier, grainIntensity == \pronounced ? 3.0 : 1.0
+            \grainIntensityMultiplier, grainIntensity == \pronounced ? 3.0 : (grainIntensity == \extreme ? 6.0 : 1.0)
         ], synths[\analysis], \addAfter);
 
         // Spectral filter (reads from frozen audio)
@@ -677,36 +676,45 @@ Chroma {
             \mix, overdriveParams[\mix]
         ], synths[\filter], \addAfter);
 
-        // Granular (reads from overdrive audio)
-        synths[\granular] = Synth(\chroma_granular, [
+        // Bitcrushing (reads from overdrive audio)
+        synths[\bitcrush] = Synth(\chroma_bitcrush, [
             \inBus, buses[\overdriveAudio],
+            \outBus, buses[\bitcrushAudio],
+            \bitDepth, bitcrushParams[\bitDepth],
+            \sampleRate, bitcrushParams[\sampleRate],
+            \drive, bitcrushParams[\drive],
+            \mix, if(bitcrushParams[\enabled], { bitcrushParams[\mix] }, { 0.0 })
+        ], synths[\overdrive], \addAfter);
+
+        // Granular (reads from bitcrushed audio)
+        synths[\granular] = Synth(\chroma_granular, [
+            \inBus, buses[\bitcrushAudio],
             \outBus, buses[\granularAudio],
             \grainBuf, grainBuffer,
             \freezeBuf, freezeBuffer,
             \ctrlBus, buses[\granularCtrl],
             \freeze, frozen.asInteger,
             \mix, granularParams[\mix]
-        ], synths[\overdrive], \addAfter);
+        ], synths[\bitcrush], \addAfter);
 
-        // Shimmer reverb (reads from overdrive audio)
-        synths[\shimmerReverb] = Synth(\chroma_shimmer_reverb, [
-            \inBus, buses[\overdriveAudio],
+        // Reverb (reads from granular audio)
+        synths[\reverb] = Synth(\chroma_reverb, [
+            \inBus, buses[\granularAudio],
             \outBus, buses[\reverbAudio],
-            \decayTime, reverbDelayParams[\decayTime],
-            \shimmerPitch, reverbDelayParams[\shimmerPitch],
-            \mix, reverbDelayParams[\mix]
+            \decayTime, reverbParams[\decayTime],
+            \mix, if(reverbParams[\enabled], { reverbParams[\mix] }, { 0.0 })
         ], synths[\granular], \addAfter);
 
-        // Modulated delay (reads from overdrive audio)
+        // Modulated delay (reads from granular audio)
         synths[\modDelay] = Synth(\chroma_mod_delay, [
-            \inBus, buses[\overdriveAudio],
+            \inBus, buses[\granularAudio],
             \outBus, buses[\delayAudio],
-            \delayTime, reverbDelayParams[\delayTime],
-            \decayTime, reverbDelayParams[\decayTime],
-            \modRate, reverbDelayParams[\modRate],
-            \modDepth, reverbDelayParams[\modDepth],
-            \mix, reverbDelayParams[\mix]
-        ], synths[\shimmerReverb], \addAfter);
+            \delayTime, delayParams[\delayTime],
+            \decayTime, delayParams[\decayTime],
+            \modRate, delayParams[\modRate],
+            \modDepth, delayParams[\modDepth],
+            \mix, if(delayParams[\enabled], { delayParams[\mix] }, { 0.0 })
+        ], synths[\reverb], \addAfter);
 
         // Output mixer (at tail)
         synths[\output] = Synth(\chroma_output, [
@@ -714,7 +722,6 @@ Chroma {
             \granularBus, buses[\granularAudio],
             \reverbBus, buses[\reverbAudio],
             \delayBus, buses[\delayAudio],
-            \reverbDelayBlend, reverbDelayParams[\blend],
             \dryWet, dryWet
         ], nil, \addToTail);
 
@@ -813,23 +820,55 @@ Chroma {
             this.sendState(replyAddr);
         }, '/chroma/grainIntensity');
 
-        // Reverb/Delay controls
-        OSCdef(\chromaReverbDelayBlend, { |msg|
-            this.setReverbDelayBlend(msg[1]);
+        // Bitcrushing controls
+        OSCdef(\chromaBitcrushEnabled, { |msg|
+            this.setBitcrushEnabled(msg[1].asBoolean);
             this.sendState(replyAddr);
-        }, '/chroma/reverbDelayBlend');
-        OSCdef(\chromaDecayTime, { |msg|
-            this.setDecayTime(msg[1]);
+        }, '/chroma/bitcrushEnabled');
+        OSCdef(\chromaBitDepth, { |msg|
+            this.setBitDepth(msg[1]);
             this.sendState(replyAddr);
-        }, '/chroma/decayTime');
-        OSCdef(\chromaShimmerPitch, { |msg|
-            this.setShimmerPitch(msg[1]);
+        }, '/chroma/bitDepth');
+        OSCdef(\chromaBitcrushSampleRate, { |msg|
+            this.setBitcrushSampleRate(msg[1]);
             this.sendState(replyAddr);
-        }, '/chroma/shimmerPitch');
+        }, '/chroma/bitcrushSampleRate');
+        OSCdef(\chromaBitcrushDrive, { |msg|
+            this.setBitcrushDrive(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/bitcrushDrive');
+        OSCdef(\chromaBitcrushMix, { |msg|
+            this.setBitcrushMix(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/bitcrushMix');
+
+        // Reverb controls
+        OSCdef(\chromaReverbEnabled, { |msg|
+            this.setReverbEnabled(msg[1].asBoolean);
+            this.sendState(replyAddr);
+        }, '/chroma/reverbEnabled');
+        OSCdef(\chromaReverbDecayTime, { |msg|
+            this.setReverbDecayTime(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/reverbDecayTime');
+        OSCdef(\chromaReverbMix, { |msg|
+            this.setReverbMix(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/reverbMix');
+
+        // Delay controls
+        OSCdef(\chromaDelayEnabled, { |msg|
+            this.setDelayEnabled(msg[1].asBoolean);
+            this.sendState(replyAddr);
+        }, '/chroma/delayEnabled');
         OSCdef(\chromaDelayTime, { |msg|
             this.setDelayTime(msg[1]);
             this.sendState(replyAddr);
         }, '/chroma/delayTime');
+        OSCdef(\chromaDelayDecayTime, { |msg|
+            this.setDelayDecayTime(msg[1]);
+            this.sendState(replyAddr);
+        }, '/chroma/delayDecayTime');
         OSCdef(\chromaModRate, { |msg|
             this.setModRate(msg[1]);
             this.sendState(replyAddr);
@@ -838,10 +877,10 @@ Chroma {
             this.setModDepth(msg[1]);
             this.sendState(replyAddr);
         }, '/chroma/modDepth');
-        OSCdef(\chromaReverbDelayMix, { |msg|
-            this.setReverbDelayMix(msg[1]);
+        OSCdef(\chromaDelayMix, { |msg|
+            this.setDelayMix(msg[1]);
             this.sendState(replyAddr);
-        }, '/chroma/reverbDelayMix');
+        }, '/chroma/delayMix');
 
         // Global controls
         OSCdef(\chromaBlendMode, { |msg|
@@ -887,14 +926,21 @@ Chroma {
             granularParams[\posScatter],
             granularParams[\mix],
             frozen.asInteger,
-            grainIntensity.asString,  // Add grain intensity to state message
-            reverbDelayParams[\blend],
-            reverbDelayParams[\decayTime],
-            reverbDelayParams[\shimmerPitch],
-            reverbDelayParams[\delayTime],
-            reverbDelayParams[\modRate],
-            reverbDelayParams[\modDepth],
-            reverbDelayParams[\mix],
+            grainIntensity.asString,
+            bitcrushParams[\enabled].asInteger,
+            bitcrushParams[\bitDepth],
+            bitcrushParams[\sampleRate],
+            bitcrushParams[\drive],
+            bitcrushParams[\mix],
+            reverbParams[\enabled].asInteger,
+            reverbParams[\decayTime],
+            reverbParams[\mix],
+            delayParams[\enabled].asInteger,
+            delayParams[\delayTime],
+            delayParams[\decayTime],
+            delayParams[\modRate],
+            delayParams[\modDepth],
+            delayParams[\mix],
             this.blendModeIndex,
             dryWet
         );
@@ -925,13 +971,20 @@ Chroma {
         OSCdef(\chromaGranularMix).free;
         OSCdef(\chromaGranularFreeze).free;
         OSCdef(\chromaGrainIntensity).free;
-        OSCdef(\chromaReverbDelayBlend).free;
-        OSCdef(\chromaDecayTime).free;
-        OSCdef(\chromaShimmerPitch).free;
+        OSCdef(\chromaBitcrushEnabled).free;
+        OSCdef(\chromaBitDepth).free;
+        OSCdef(\chromaBitcrushSampleRate).free;
+        OSCdef(\chromaBitcrushDrive).free;
+        OSCdef(\chromaBitcrushMix).free;
+        OSCdef(\chromaReverbEnabled).free;
+        OSCdef(\chromaReverbDecayTime).free;
+        OSCdef(\chromaReverbMix).free;
+        OSCdef(\chromaDelayEnabled).free;
         OSCdef(\chromaDelayTime).free;
+        OSCdef(\chromaDelayDecayTime).free;
         OSCdef(\chromaModRate).free;
         OSCdef(\chromaModDepth).free;
-        OSCdef(\chromaReverbDelayMix).free;
+        OSCdef(\chromaDelayMix).free;
         OSCdef(\chromaBlendMode).free;
         OSCdef(\chromaDryWet).free;
         OSCdef(\chromaSync).free;
@@ -1045,40 +1098,7 @@ Chroma {
         if(synths[\granular].notNil) { synths[\granular].set(\mix, val) };
     }
 
-    setReverbDelayBlend { |val|
-        reverbDelayParams[\blend] = val.clip(0, 1);
-        if(synths[\output].notNil) { synths[\output].set(\reverbDelayBlend, val) };
-        if(synths[\blend].notNil) { synths[\blend].set(\baseReverbDelayBlend, val) };
-    }
 
-    setDecayTime { |val|
-        reverbDelayParams[\decayTime] = val.clip(0.5, 10);
-        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\decayTime, val) };
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\decayTime, val) };
-        if(synths[\blend].notNil) { synths[\blend].set(\baseDecayTime, val) };
-    }
-
-    setShimmerPitch { |val|
-        reverbDelayParams[\shimmerPitch] = val;
-        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\shimmerPitch, val) };
-    }
-
-    setDelayTime { |val|
-        reverbDelayParams[\delayTime] = val.clip(0.1, 1);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\delayTime, val) };
-    }
-
-    setModRate { |val|
-        reverbDelayParams[\modRate] = val.clip(0.1, 5);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modRate, val) };
-        if(synths[\blend].notNil) { synths[\blend].set(\baseModRate, val) };
-    }
-
-    setModDepth { |val|
-        reverbDelayParams[\modDepth] = val.clip(0, 1);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modDepth, val) };
-        if(synths[\blend].notNil) { synths[\blend].set(\baseModDepth, val) };
-    }
 
     setGrainIntensity { |mode|
         var validModes = grainIntensityMultipliers.keys;
@@ -1094,9 +1114,90 @@ Chroma {
         }
     }
 
-    setReverbDelayMix { |val|
-        reverbDelayParams[\mix] = val.clip(0, 1);
-        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\mix, val) };
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\mix, val) };
+    // Bitcrushing controls
+    setBitcrushEnabled { |enabled|
+        bitcrushParams[\enabled] = enabled;
+        if(synths[\bitcrush].notNil) { 
+            synths[\bitcrush].set(\mix, if(enabled, { bitcrushParams[\mix] }, { 0.0 }));
+        };
     }
+
+    setBitDepth { |val|
+        bitcrushParams[\bitDepth] = val.clip(4, 16);
+        if(synths[\bitcrush].notNil) { synths[\bitcrush].set(\bitDepth, val) };
+    }
+
+    setBitcrushSampleRate { |val|
+        bitcrushParams[\sampleRate] = val.clip(1000, 44100);
+        if(synths[\bitcrush].notNil) { synths[\bitcrush].set(\sampleRate, val) };
+    }
+
+    setBitcrushDrive { |val|
+        bitcrushParams[\drive] = val.clip(0, 1);
+        if(synths[\bitcrush].notNil) { synths[\bitcrush].set(\drive, val) };
+    }
+
+    setBitcrushMix { |val|
+        bitcrushParams[\mix] = val.clip(0, 1);
+        if(synths[\bitcrush].notNil && { bitcrushParams[\enabled] }) { 
+            synths[\bitcrush].set(\mix, val);
+        };
+    }
+
+    // Reverb controls
+    setReverbEnabled { |enabled|
+        reverbParams[\enabled] = enabled;
+        if(synths[\reverb].notNil) { 
+            synths[\reverb].set(\mix, if(enabled, { reverbParams[\mix] }, { 0.0 }));
+        };
+    }
+
+    setReverbDecayTime { |val|
+        reverbParams[\decayTime] = val.clip(0.5, 10);
+        if(synths[\reverb].notNil) { synths[\reverb].set(\decayTime, val) };
+    }
+
+    setReverbMix { |val|
+        reverbParams[\mix] = val.clip(0, 1);
+        if(synths[\reverb].notNil && { reverbParams[\enabled] }) { 
+            synths[\reverb].set(\mix, val);
+        };
+    }
+
+    // Delay controls
+    setDelayEnabled { |enabled|
+        delayParams[\enabled] = enabled;
+        if(synths[\modDelay].notNil) { 
+            synths[\modDelay].set(\mix, if(enabled, { delayParams[\mix] }, { 0.0 }));
+        };
+    }
+
+    setDelayTime { |val|
+        delayParams[\delayTime] = val.clip(0.1, 1);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\delayTime, val) };
+    }
+
+    setDelayDecayTime { |val|
+        delayParams[\decayTime] = val.clip(0.5, 10);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\decayTime, val) };
+    }
+
+    setModRate { |val|
+        delayParams[\modRate] = val.clip(0.1, 5);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modRate, val) };
+    }
+
+    setModDepth { |val|
+        delayParams[\modDepth] = val.clip(0, 1);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modDepth, val) };
+    }
+
+    setDelayMix { |val|
+        delayParams[\mix] = val.clip(0, 1);
+        if(synths[\modDelay].notNil && { delayParams[\enabled] }) { 
+            synths[\modDelay].set(\mix, val);
+        };
+    }
+
+
 }

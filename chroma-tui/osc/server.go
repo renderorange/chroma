@@ -24,13 +24,20 @@ type State struct {
 	GranularMix          float32
 	GranularFrozen       bool
 	GrainIntensity       string
-	ReverbDelayBlend     float32
-	DecayTime            float32
-	ShimmerPitch         float32
+	BitcrushEnabled      bool
+	BitDepth             float32
+	BitcrushSampleRate   float32
+	BitcrushDrive        float32
+	BitcrushMix          float32
+	ReverbEnabled        bool
+	ReverbDecayTime      float32
+	ReverbMix            float32
+	DelayEnabled         bool
 	DelayTime            float32
+	DelayDecayTime       float32
 	ModRate              float32
 	ModDepth             float32
-	ReverbDelayMix       float32
+	DelayMix             float32
 	BlendMode            int
 	DryWet               float32
 
@@ -53,7 +60,7 @@ func NewServer(port int) *Server {
 
 	d := osc.NewStandardDispatcher()
 	d.AddMsgHandler("/chroma/state", func(msg *osc.Message) {
-		if len(msg.Arguments) >= 25 {
+		if len(msg.Arguments) >= 31 {
 			state := State{
 				Gain:                 toFloat32(msg.Arguments[0]),
 				InputFrozen:          toInt(msg.Arguments[1]) == 1,
@@ -71,15 +78,22 @@ func NewServer(port int) *Server {
 				GranularMix:          toFloat32(msg.Arguments[13]),
 				GranularFrozen:       toInt(msg.Arguments[14]) == 1,
 				GrainIntensity:       toString(msg.Arguments[15]),
-				ReverbDelayBlend:     toFloat32(msg.Arguments[16]),
-				DecayTime:            toFloat32(msg.Arguments[17]),
-				ShimmerPitch:         toFloat32(msg.Arguments[18]),
-				DelayTime:            toFloat32(msg.Arguments[19]),
-				ModRate:              toFloat32(msg.Arguments[20]),
-				ModDepth:             toFloat32(msg.Arguments[21]),
-				ReverbDelayMix:       toFloat32(msg.Arguments[22]),
-				BlendMode:            toInt(msg.Arguments[23]),
-				DryWet:               toFloat32(msg.Arguments[24]),
+				BitcrushEnabled:      toInt(msg.Arguments[16]) == 1,
+				BitDepth:             toFloat32(msg.Arguments[17]),
+				BitcrushSampleRate:   toFloat32(msg.Arguments[18]),
+				BitcrushDrive:        toFloat32(msg.Arguments[19]),
+				BitcrushMix:          toFloat32(msg.Arguments[20]),
+				ReverbEnabled:        toInt(msg.Arguments[21]) == 1,
+				ReverbDecayTime:      toFloat32(msg.Arguments[22]),
+				ReverbMix:            toFloat32(msg.Arguments[23]),
+				DelayEnabled:         toInt(msg.Arguments[24]) == 1,
+				DelayTime:            toFloat32(msg.Arguments[25]),
+				DelayDecayTime:       toFloat32(msg.Arguments[26]),
+				ModRate:              toFloat32(msg.Arguments[27]),
+				ModDepth:             toFloat32(msg.Arguments[28]),
+				DelayMix:             toFloat32(msg.Arguments[29]),
+				BlendMode:            toInt(msg.Arguments[30]),
+				DryWet:               toFloat32(msg.Arguments[31]),
 			}
 			s.stateMu.Lock()
 			existingSpectrum := s.currentState.Spectrum

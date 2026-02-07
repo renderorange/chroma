@@ -44,13 +44,20 @@ var (
 	TestCtrlGranularPosScatter   = ctrlGranularPosScatter
 	TestCtrlGranularMix          = ctrlGranularMix
 	TestCtrlGranularFreeze       = ctrlGranularFreeze
-	TestCtrlReverbDelayBlend     = ctrlReverbDelayBlend
-	TestCtrlDecayTime            = ctrlDecayTime
-	TestCtrlShimmerPitch         = ctrlShimmerPitch
+	TestCtrlBitcrushEnabled      = ctrlBitcrushEnabled
+	TestCtrlBitDepth             = ctrlBitDepth
+	TestCtrlBitcrushSampleRate   = ctrlBitcrushSampleRate
+	TestCtrlBitcrushDrive        = ctrlBitcrushDrive
+	TestCtrlBitcrushMix          = ctrlBitcrushMix
+	TestCtrlReverbEnabled        = ctrlReverbEnabled
+	TestCtrlReverbDecayTime      = ctrlReverbDecayTime
+	TestCtrlReverbMix            = ctrlReverbMix
+	TestCtrlDelayEnabled         = ctrlDelayEnabled
 	TestCtrlDelayTime            = ctrlDelayTime
+	TestCtrlDelayDecayTime       = ctrlDelayDecayTime
 	TestCtrlModRate              = ctrlModRate
 	TestCtrlModDepth             = ctrlModDepth
-	TestCtrlReverbDelayMix       = ctrlReverbDelayMix
+	TestCtrlDelayMix             = ctrlDelayMix
 	TestCtrlBlendMode            = ctrlBlendMode
 	TestCtrlDryWet               = ctrlDryWet
 )

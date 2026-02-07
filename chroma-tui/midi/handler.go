@@ -92,10 +92,10 @@ func (h *Handler) handleCC(cc int, value float32) {
 		h.client.SetGranularSize(0.01 + value*0.49)
 	case cfg["granular_mix"]:
 		h.client.SetGranularMix(value)
-	case cfg["reverb_delay_blend"]:
-		h.client.SetReverbDelayBlend(value)
-	case cfg["decay_time"]:
-		h.client.SetDecayTime(0.1 + value*9.9)
+	case cfg["reverb_mix"]:
+		h.client.SetReverbMix(value)
+	case cfg["delay_mix"]:
+		h.client.SetDelayMix(value)
 	case cfg["dry_wet"]:
 		h.client.SetDryWet(value)
 	}

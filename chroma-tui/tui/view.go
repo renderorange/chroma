@@ -59,8 +59,10 @@ func (m Model) View() string {
 	sections = append(sections, m.renderSection("INPUT", width, m.renderInputControls))
 	sections = append(sections, m.renderSection("FILTER", width, m.renderFilterControls))
 	sections = append(sections, m.renderSection("OVERDRIVE", width, m.renderOverdriveControls))
+	sections = append(sections, m.renderSection("BITCRUSH", width, m.renderBitcrushControls))
 	sections = append(sections, m.renderSection("GRANULAR", width, m.renderGranularControls))
-	sections = append(sections, m.renderSection("REVERB/DELAY", width, m.renderReverbDelayControls))
+	sections = append(sections, m.renderSection("REVERB", width, m.renderReverbControls))
+	sections = append(sections, m.renderSection("DELAY", width, m.renderDelayControls))
 	sections = append(sections, m.renderSection("GLOBAL", width, m.renderGlobalControls))
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
@@ -129,6 +131,16 @@ func (m Model) renderOverdriveControls(width int) []string {
 	}
 }
 
+func (m Model) renderBitcrushControls(width int) []string {
+	return []string{
+		m.renderButton("BITCRUSH", m.BitcrushEnabled, ctrlBitcrushEnabled),
+		m.renderSlider("BitDepth", m.BitDepth, 4, 16, width, ctrlBitDepth),
+		m.renderSlider("SampleRate", m.BitcrushSampleRate, 1000, 44100, width, ctrlBitcrushSampleRate),
+		m.renderSlider("Drive", m.BitcrushDrive, 0, 1, width, ctrlBitcrushDrive),
+		m.renderSlider("Mix", m.BitcrushMix, 0, 1, width, ctrlBitcrushMix),
+	}
+}
+
 func (m Model) renderGranularControls(width int) []string {
 	return []string{
 		m.renderSlider("Density", m.GranularDensity, 1, 50, width, ctrlGranularDensity),
@@ -141,15 +153,22 @@ func (m Model) renderGranularControls(width int) []string {
 	}
 }
 
-func (m Model) renderReverbDelayControls(width int) []string {
+func (m Model) renderReverbControls(width int) []string {
 	return []string{
-		m.renderSlider("Rev<>Dly", m.ReverbDelayBlend, 0, 1, width, ctrlReverbDelayBlend),
-		m.renderSlider("Decay", m.DecayTime, 0.1, 10, width, ctrlDecayTime),
-		m.renderSlider("Shimmer", m.ShimmerPitch, 0, 24, width, ctrlShimmerPitch),
-		m.renderSlider("DelayTime", m.DelayTime, 0.01, 1, width, ctrlDelayTime),
+		m.renderButton("REVERB", m.ReverbEnabled, ctrlReverbEnabled),
+		m.renderSlider("Decay", m.ReverbDecayTime, 0.5, 10, width, ctrlReverbDecayTime),
+		m.renderSlider("Mix", m.ReverbMix, 0, 1, width, ctrlReverbMix),
+	}
+}
+
+func (m Model) renderDelayControls(width int) []string {
+	return []string{
+		m.renderButton("DELAY", m.DelayEnabled, ctrlDelayEnabled),
+		m.renderSlider("Time", m.DelayTime, 0.1, 1, width, ctrlDelayTime),
+		m.renderSlider("Decay", m.DelayDecayTime, 0.5, 10, width, ctrlDelayDecayTime),
 		m.renderSlider("ModRate", m.ModRate, 0.1, 10, width, ctrlModRate),
 		m.renderSlider("ModDepth", m.ModDepth, 0, 1, width, ctrlModDepth),
-		m.renderSlider("Mix", m.ReverbDelayMix, 0, 1, width, ctrlReverbDelayMix),
+		m.renderSlider("Mix", m.DelayMix, 0, 1, width, ctrlDelayMix),
 	}
 }
 
@@ -231,7 +250,7 @@ func (m Model) renderModeSelector(width int) string {
 }
 
 func (m Model) renderIntensitySelector(width int) string {
-	intensities := []string{"SUBTLE", "PRONOUNCED"}
+	intensities := []string{"SUBTLE", "PRONOUNCED", "EXTREME"}
 	var parts []string
 
 	for _, intensity := range intensities {
