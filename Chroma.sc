@@ -61,6 +61,7 @@ Chroma {
             enabled: false,
             drive: 0.5,
             tone: 0.7,
+            bias: 0.5,  // neutral bias (no DC offset)
             mix: 0.0
         );
         granularParams = (
@@ -161,7 +162,7 @@ Chroma {
 
         // Effect control buses
         buses[\filterGains] = Bus.control(server, 8);
-        buses[\overdriveCtrl] = Bus.control(server, 2);  // drive, tone
+        buses[\overdriveCtrl] = Bus.control(server, 3);  // drive, tone, bias (was 2)
         buses[\granularCtrl] = Bus.control(server, 4);  // density, size, pitchScatter, posScatter
 
         // Grain buffers (2 seconds at server sample rate)
@@ -284,13 +285,13 @@ Chroma {
     loadBlendControlSynthDef {
         SynthDef(\chroma_blend, { |mode=0, bandsBus, centroidBus, spreadBus, flatnessBus,
             filterGainsBus, overdriveCtrlBus, granularCtrlBus,
-            baseFilterAmount=0.5, baseOverdriveDrive=0.5, baseOverdriveTone=0.7,
+            baseFilterAmount=0.5, baseOverdriveDrive=0.5, baseOverdriveTone=0.7, baseOverdriveBias=0.5,
             baseGrainDensity=10, baseGrainSize=0.1,
             basePitchScatter=0.1, basePosScatter=0.2,
             grainIntensityMultiplier=1.0|
 
             var bands, centroid, spread, flatness;
-            var filterGains, overdriveDrive, overdriveTone;
+            var filterGains, overdriveDrive, overdriveTone, overdriveBias;
             var grainDensity, grainSize, pitchScatter, posScatter;
             var extremeFactor;
 
@@ -326,6 +327,15 @@ Chroma {
                 (1 - centroid).linlin(0, 1, baseOverdriveTone * 0.8, baseOverdriveTone * 1.2),
                 // Transform: spread affects tone
                 spread.linlin(0, 1, baseOverdriveTone * 0.7, baseOverdriveTone * 1.3)
+            ]);
+
+            overdriveBias = Select.kr(mode, [
+                // Mirror: bright input = more bias
+                centroid.linlin(0, 1, baseOverdriveBias * 0.8, baseOverdriveBias * 1.2),
+                // Complement: dark input = more bias
+                (1 - centroid).linlin(0, 1, baseOverdriveBias * 0.8, baseOverdriveBias * 1.2),
+                // Transform: flatness affects bias
+                flatness.linlin(0, 1, baseOverdriveBias * 0.7, baseOverdriveBias * 1.3)
             ]);
 
             // Granular parameters
@@ -373,7 +383,7 @@ Chroma {
             pitchScatter = pitchScatter * grainIntensityMultiplier.linlin(1.0, 6.0, 1.0, 1.33).clip(1.0, 1.33); // More pitch variation
 
             Out.kr(filterGainsBus, filterGains.lag(0.1));
-            Out.kr(overdriveCtrlBus, [overdriveDrive, overdriveTone].clip(0, 1).lag(0.1));
+            Out.kr(overdriveCtrlBus, [overdriveDrive, overdriveTone, overdriveBias].clip(0, 1).lag(0.1));
             Out.kr(granularCtrlBus, [grainDensity, grainSize, pitchScatter, posScatter].lag(0.1));
         }).add;
     }
@@ -409,17 +419,24 @@ Chroma {
     }
 
     loadOverdriveSynthDef {
-        SynthDef(\chroma_overdrive, { |inBus, outBus, ctrlBus, drive=0.5, tone=0.7, mix=0.0|
-            var sig, dry, wet, ctrl, modDrive, modTone;
+        SynthDef(\chroma_overdrive, { |inBus, outBus, ctrlBus, drive=0.5, tone=0.7, bias=0.5, mix=0.0|
+            var sig, dry, wet, ctrl, modDrive, modTone, modBias, dcOffset;
             var preGain, postGain, cutoff;
 
             sig = In.ar(inBus);
             dry = sig;
 
-            // Read modulated values from control bus
-            ctrl = In.kr(ctrlBus, 2);
+            // Read control bus (now 3 channels)
+            ctrl = In.kr(ctrlBus, 3);
             modDrive = ctrl[0].lag(0.05);
             modTone = ctrl[1].lag(0.05);
+            modBias = ctrl[2].lag(0.05);
+
+            // Convert internal bias (0-1) to DC offset (-1 to 1)
+            dcOffset = (modBias - 0.5) * 2;
+
+            // Apply DC offset BEFORE saturation for asymmetrical clipping
+            sig = sig + dcOffset;
 
             // Pre-gain based on drive (1x to 20x)
             preGain = modDrive.linexp(0, 1, 1, 20);
@@ -665,6 +682,7 @@ Chroma {
             \baseFilterAmount, filterParams[\amount],
             \baseOverdriveDrive, overdriveParams[\drive],
             \baseOverdriveTone, overdriveParams[\tone],
+            \baseOverdriveBias, overdriveParams[\bias],
             \baseGrainDensity, granularParams[\density],
             \baseGrainSize, granularParams[\size],
             \basePitchScatter, granularParams[\pitchScatter],
@@ -688,6 +706,7 @@ Chroma {
             \ctrlBus, buses[\overdriveCtrl],
             \drive, overdriveParams[\drive],
             \tone, overdriveParams[\tone],
+            \bias, overdriveParams[\bias],
             \mix, if(overdriveParams[\enabled], { overdriveParams[\mix] }, { 0.0 })
         ], synths[\blend], \addAfter);
 
@@ -852,6 +871,13 @@ Chroma {
             this.setOverdriveMix(msg[1]);
 
         }, '/chroma/overdriveMix');
+        OSCdef(\chromaOverdriveBias, { |msg|
+            if(msg.size >= 2 && msg[1].isNumber) {
+                this.setOverdriveBias(msg[1]);
+            } {
+                "Invalid overdriveBias message: %".format(msg).warn;
+            }
+        }, '/chroma/overdriveBias');
 
         // Granular controls
         OSCdef(\chromaGranularEnabled, { |msg|
@@ -989,6 +1015,7 @@ Chroma {
         OSCdef(\chromaOverdriveEnabled).free;
         OSCdef(\chromaOverdriveDrive).free;
         OSCdef(\chromaOverdriveTone).free;
+        OSCdef(\chromaOverdriveBias).free;
         OSCdef(\chromaOverdriveMix).free;
         OSCdef(\chromaGranularEnabled).free;
         OSCdef(\chromaGranularDensity).free;
@@ -1118,6 +1145,13 @@ Chroma {
         if(synths[\overdrive].notNil && { overdriveParams[\enabled] }) {
             synths[\overdrive].set(\mix, val);
         };
+    }
+
+    setOverdriveBias { |val|
+        var normalizedVal = val.linlin(-1, 1, 0, 1);  // Convert OSC range (-1,1) to internal (0,1)
+        overdriveParams[\bias] = normalizedVal.clip(0, 1);
+        if(synths[\overdrive].notNil) { synths[\overdrive].set(\bias, normalizedVal) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseOverdriveBias, normalizedVal) };
     }
 
     setGranularEnabled { |enabled|
