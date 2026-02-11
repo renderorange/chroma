@@ -9,21 +9,21 @@ A SuperCollider-based audio effects engine providing real-time audio processing 
 - **Overdrive** - Saturation/distortion with drive, tone, and mix parameters  
 - **Bitcrush** - Bit reduction and sample rate manipulation
 - **Granular Processor** - Density, size, and scatter controls with freeze capability
-- **Shimmer Reverb** - Algorithmic reverb with decay time control
+- **Reverb** - Algorithmic reverb with decay time control
 - **Modulated Delay** - Delay time, decay, and modulation parameters
 - **Input Freeze** - Adjustable loop length for sustained tones
 - **Blend Modes** - Mirror, complement, and transform modes for effect combination
 
 ### Control Interface
 - **OSC Control** - Full parameter control via OSC messages
-- **Headless Operation** - No GUI dependency, perfect for embedded systems
+- **Headless Operation** - No GUI dependency
 - **Effects Chain Reordering** - Dynamic effects processing order
 - **Real-time Parameters** - All audio parameters controllable in real-time
 
 ### Audio Processing
 - **Sample Rate** - 44.1 kHz (configurable)
-- **Buffer Management** - Efficient circular buffers for granular and freeze effects
-- **Spectral Analysis** - 8-band spectrum analysis for visualization
+- **Buffer Management** - Circular buffers for granular and freeze effects
+- **Spectral Analysis** - 8-band spectrum analysis for real-time effect modulation
 - **Cross-platform** - Works on Linux, macOS, and Windows
 
 ## Installation
@@ -134,7 +134,7 @@ n.sendMsg("/chroma/dryWet", 0.7);
 | Granular Position Scatter | `/chroma/granularPosScatter` | 0.0-1.0 | Position variation |
 | Granular Mix | `/chroma/granularMix` | 0.0-1.0 | Granular wet/dry mix |
 | Granular Freeze | `/chroma/granularFreeze` | 0/1 | Freeze granular buffer |
-| Grain Intensity | `/chroma/grainIntensity` | subtle/pronounced | Granular intensity mode |
+| Grain Intensity | `/chroma/grainIntensity` | subtle/pronounced/extreme | Granular intensity mode |
 | Bitcrush Enable | `/chroma/bitcrushEnabled` | 0/1 | Enable bitcrush |
 | Bit Depth | `/chroma/bitDepth` | 4-16 | Bit reduction depth |
 | Sample Rate | `/chroma/bitcrushSampleRate` | 1000-44100 | Sample rate reduction |
@@ -245,7 +245,7 @@ Audio Input → Analysis → Effects Chain → Audio Output
 3. Overdrive/Saturation
 4. Granular Processing
 5. Bitcrush
-6. Shimmer Reverb
+6. Reverb
 7. Modulated Delay
 8. Output Mixer
 

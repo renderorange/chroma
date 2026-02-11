@@ -10,7 +10,6 @@ Chroma {
     var <dryWet;
     var <grainBuffer;
     var <freezeBuffer;
-    var <waveformBuffer;
     var <frozen;
     var <inputFreezeBuffer;
     var <inputFrozen;
@@ -25,7 +24,6 @@ Chroma {
     var <>grainIntensity = \subtle;
     var <grainIntensityMultipliers;  // Dictionary for intensity multiplier constants
     var <effectsOrder;  // Array of effect symbols in processing order
-
 
     *new { |server|
         ^super.new.init(server);
@@ -173,8 +171,7 @@ Chroma {
         // Input freeze buffer (0.5 seconds max loop length)
         inputFreezeBuffer = Buffer.alloc(server, (server.sampleRate * 0.5).asInteger, 1);
 
-        // Waveform buffer for oscilloscope display (0.05 seconds = 50ms)
-        waveformBuffer = Buffer.alloc(server, (server.sampleRate * 0.05).asInteger, 1);
+        
 
         // Bus for frozen audio output
         buses[\frozenAudio] = Bus.audio(server, 1);
@@ -182,7 +179,6 @@ Chroma {
 
     loadSynthDefs {
         this.loadInputSynthDef;
-        this.loadWaveformRecorderSynthDef;
         this.loadInputFreezeSynthDef;
         this.loadAnalysisSynthDef;
         this.loadBlendControlSynthDef;
@@ -202,15 +198,6 @@ Chroma {
             amp = Amplitude.kr(sig, 0.01, 0.1);
             Out.kr(ampBus, amp);
             Out.ar(outBus, sig);
-        }).add;
-    }
-
-    loadWaveformRecorderSynthDef {
-        SynthDef(\chroma_waveform_recorder, { |inBus, waveformBuf|
-            var sig;
-            sig = In.ar(inBus);
-            // Record continuously to waveform buffer
-            RecordBuf.ar(sig, waveformBuf, loop: 1, trigger: 1);
         }).add;
     }
 
@@ -642,11 +629,7 @@ Chroma {
             \ampBus, buses[\inputAmp]
         ]);
 
-        // Waveform recorder (capture input for oscilloscope)
-        synths[\waveformRecorder] = Synth(\chroma_waveform_recorder, [
-            \inBus, buses[\inputAudio],
-            \waveformBuf, waveformBuffer
-        ], synths[\input], \addAfter);
+        
 
         // Input freeze (between input and analysis)
         synths[\inputFreeze] = Synth(\chroma_input_freeze, [
@@ -813,7 +796,7 @@ Chroma {
         grainBuffer.free;
         freezeBuffer.free;
         inputFreezeBuffer.free;
-        waveformBuffer.free;
+        
         "Chroma stopped".postln;
     }
 
