@@ -10,15 +10,22 @@ Chroma {
     var <dryWet;
     var <grainBuffer;
     var <freezeBuffer;
+    var <waveformBuffer;
     var <frozen;
     var <inputFreezeBuffer;
     var <inputFrozen;
     var <inputFreezeLength;
     var <filterParams;
+    var <overdriveParams;
     var <granularParams;
-    var <reverbDelayParams;
+    var <reverbParams;
+    var <delayParams;
+    var <bitcrushParams;
     var <inputGain;
     var <>grainIntensity = \subtle;
+    var <grainIntensityMultipliers;  // Dictionary for intensity multiplier constants
+    var <effectsOrder;  // Array of effect symbols in processing order
+
 
     *new { |server|
         ^super.new.init(server);
@@ -40,27 +47,53 @@ Chroma {
         frozen = false;
         inputFrozen = false;
         inputFreezeLength = 0.1;
+        inputGain = 1.0;
+        grainIntensityMultipliers = (
+            subtle: 1.0,        // Normal granular effect intensity
+            pronounced: 3.0,    // 3x intensity based on perceptual testing for pronounced grain effect
+            extreme: 6.0         // 6x intensity for extreme granular effect
+        );
         filterParams = (
+            enabled: true,
             amount: 0.5,
             cutoff: 2000,
             resonance: 0.3
         );
+        overdriveParams = (
+            enabled: false,
+            drive: 0.5,
+            tone: 0.7,
+            mix: 0.0
+        );
         granularParams = (
-            density: 10,
-            size: 0.1,
-            pitchScatter: 0.1,
-            posScatter: 0.2,
+            enabled: true,
+            density: 20,
+            size: 0.15,
+            pitchScatter: 0.2,
+            posScatter: 0.3,
+            mix: 0.5
+        );
+        reverbParams = (
+            enabled: false,
+            decayTime: 3,
             mix: 0.3
         );
-        reverbDelayParams = (
-            blend: 0.5,
-            decayTime: 3,
-            shimmerPitch: 12,
+        delayParams = (
+            enabled: false,
             delayTime: 0.3,
+            decayTime: 3,
             modRate: 0.5,
             modDepth: 0.3,
             mix: 0.3
         );
+        bitcrushParams = (
+            enabled: false,
+            bitDepth: 8,
+            sampleRate: 11025,
+            drive: 0.5,
+            mix: 0.3
+        );
+        effectsOrder = [\filter, \overdrive, \bitcrush, \granular, \reverb, \delay];
         ^this;
     }
 
@@ -97,6 +130,15 @@ Chroma {
         };
     }
 
+    setEffectsOrder { |newOrder|
+        effectsOrder = newOrder;
+        this.reconnectEffects();
+    }
+
+    getEffectsOrder {
+        ^effectsOrder;
+    }
+
     allocateResources {
         // FFT buffer
         fftBuffer = Buffer.alloc(server, config[\fftSize]);
@@ -113,14 +155,16 @@ Chroma {
 
         // Effect audio buses
         buses[\filteredAudio] = Bus.audio(server, 1);
+        buses[\overdriveAudio] = Bus.audio(server, 1);
+        buses[\bitcrushAudio] = Bus.audio(server, 1);
         buses[\granularAudio] = Bus.audio(server, 1);
         buses[\reverbAudio] = Bus.audio(server, 1);
         buses[\delayAudio] = Bus.audio(server, 1);
 
         // Effect control buses
         buses[\filterGains] = Bus.control(server, 8);
+        buses[\overdriveCtrl] = Bus.control(server, 2);  // drive, tone
         buses[\granularCtrl] = Bus.control(server, 4);  // density, size, pitchScatter, posScatter
-        buses[\reverbDelayCtrl] = Bus.control(server, 4);  // blend, decay, modRate, modDepth
 
         // Grain buffers (2 seconds at server sample rate)
         grainBuffer = Buffer.alloc(server, server.sampleRate * 2, 1);
@@ -129,18 +173,24 @@ Chroma {
         // Input freeze buffer (0.5 seconds max loop length)
         inputFreezeBuffer = Buffer.alloc(server, (server.sampleRate * 0.5).asInteger, 1);
 
+        // Waveform buffer for oscilloscope display (0.05 seconds = 50ms)
+        waveformBuffer = Buffer.alloc(server, (server.sampleRate * 0.05).asInteger, 1);
+
         // Bus for frozen audio output
         buses[\frozenAudio] = Bus.audio(server, 1);
     }
 
     loadSynthDefs {
         this.loadInputSynthDef;
+        this.loadWaveformRecorderSynthDef;
         this.loadInputFreezeSynthDef;
         this.loadAnalysisSynthDef;
         this.loadBlendControlSynthDef;
         this.loadFilterSynthDef;
+        this.loadOverdriveSynthDef;
+        this.loadBitcrushSynthDef;
         this.loadGranularSynthDef;
-        this.loadShimmerReverbSynthDef;
+        this.loadReverbSynthDef;
         this.loadModDelaySynthDef;
         this.loadOutputSynthDef;
     }
@@ -152,6 +202,15 @@ Chroma {
             amp = Amplitude.kr(sig, 0.01, 0.1);
             Out.kr(ampBus, amp);
             Out.ar(outBus, sig);
+        }).add;
+    }
+
+    loadWaveformRecorderSynthDef {
+        SynthDef(\chroma_waveform_recorder, { |inBus, waveformBuf|
+            var sig;
+            sig = In.ar(inBus);
+            // Record continuously to waveform buffer
+            RecordBuf.ar(sig, waveformBuf, loop: 1, trigger: 1);
         }).add;
     }
 
@@ -237,14 +296,16 @@ Chroma {
 
     loadBlendControlSynthDef {
         SynthDef(\chroma_blend, { |mode=0, bandsBus, centroidBus, spreadBus, flatnessBus,
-            filterGainsBus, granularCtrlBus, reverbDelayCtrlBus,
-            baseFilterAmount=0.5, baseGrainDensity=10, baseGrainSize=0.1,
+            filterGainsBus, overdriveCtrlBus, granularCtrlBus,
+            baseFilterAmount=0.5, baseOverdriveDrive=0.5, baseOverdriveTone=0.7,
+            baseGrainDensity=10, baseGrainSize=0.1,
             basePitchScatter=0.1, basePosScatter=0.2,
-            baseReverbDelayBlend=0.5, baseDecayTime=3, baseModRate=0.5, baseModDepth=0.3|
+            grainIntensityMultiplier=1.0|
 
             var bands, centroid, spread, flatness;
-            var filterGains, grainDensity, grainSize, pitchScatter, posScatter;
-            var reverbDelayBlend, decayTime, modRate, modDepth;
+            var filterGains, overdriveDrive, overdriveTone;
+            var grainDensity, grainSize, pitchScatter, posScatter;
+            var extremeFactor;
 
             bands = In.kr(bandsBus, 8);
             centroid = In.kr(centroidBus);
@@ -261,23 +322,42 @@ Chroma {
                 bands * centroid.linlin(0, 1, 0.7, 1.3)
             ]);
 
+            // Overdrive modulation: drive reacts to spectral energy, tone to centroid
+            overdriveDrive = Select.kr(mode, [
+                // Mirror: bright input = more drive
+                centroid.linlin(0, 1, baseOverdriveDrive * 0.5, baseOverdriveDrive * 1.5),
+                // Complement: dark input = more drive
+                (1 - centroid).linlin(0, 1, baseOverdriveDrive * 0.5, baseOverdriveDrive * 1.5),
+                // Transform: flatness affects drive
+                flatness.linlin(0, 1, baseOverdriveDrive * 0.3, baseOverdriveDrive * 1.8)
+            ]);
+
+            overdriveTone = Select.kr(mode, [
+                // Mirror: bright input = brighter tone
+                centroid.linlin(0, 1, baseOverdriveTone * 0.8, baseOverdriveTone * 1.2),
+                // Complement: dark input = brighter tone
+                (1 - centroid).linlin(0, 1, baseOverdriveTone * 0.8, baseOverdriveTone * 1.2),
+                // Transform: spread affects tone
+                spread.linlin(0, 1, baseOverdriveTone * 0.7, baseOverdriveTone * 1.3)
+            ]);
+
             // Granular parameters
             grainDensity = Select.kr(mode, [
                 // Mirror: more energy = denser
-                bands.sum.linlin(0, 4, baseGrainDensity * 0.5, baseGrainDensity * 2),
+                bands.sum.linlin(0, 4, baseGrainDensity * 0.5 * grainIntensityMultiplier, baseGrainDensity * 2 * grainIntensityMultiplier),
                 // Complement: more energy = sparser
-                bands.sum.linlin(0, 4, baseGrainDensity * 2, baseGrainDensity * 0.5),
+                bands.sum.linlin(0, 4, baseGrainDensity * 2 * grainIntensityMultiplier, baseGrainDensity * 0.5 * grainIntensityMultiplier),
                 // Transform: flatness controls density
-                flatness.linlin(0, 1, baseGrainDensity * 0.3, baseGrainDensity * 3)
+                flatness.linlin(0, 1, baseGrainDensity * 0.3 * grainIntensityMultiplier, baseGrainDensity * 3 * grainIntensityMultiplier)
             ]);
 
             grainSize = Select.kr(mode, [
                 // Mirror: more energy = smaller grains
-                bands.sum.linlin(0, 4, baseGrainSize * 2, baseGrainSize * 0.5),
+                bands.sum.linlin(0, 4, baseGrainSize * 2 * grainIntensityMultiplier, baseGrainSize * 0.5 * grainIntensityMultiplier),
                 // Complement: more energy = larger grains
-                bands.sum.linlin(0, 4, baseGrainSize * 0.5, baseGrainSize * 2),
+                bands.sum.linlin(0, 4, baseGrainSize * 0.5 * grainIntensityMultiplier, baseGrainSize * 2 * grainIntensityMultiplier),
                 // Transform: spread controls size
-                spread.linlin(0, 1, baseGrainSize * 0.5, baseGrainSize * 2)
+                spread.linlin(0, 1, baseGrainSize * 0.5 * grainIntensityMultiplier, baseGrainSize * 2 * grainIntensityMultiplier)
             ]);
 
             pitchScatter = Select.kr(mode, [
@@ -298,40 +378,16 @@ Chroma {
                 spread.linlin(0, 1, 0.05, basePosScatter * 2)
             ]);
 
-            // Reverb/Delay parameters
-            reverbDelayBlend = Select.kr(mode, [
-                // Mirror: bright = more shimmer (reverb)
-                centroid.linlin(0, 1, 0.7, 0.0),
-                // Complement: bright = more delay
-                centroid.linlin(0, 1, 0.0, 1.0),
-                // Transform: flatness controls
-                flatness.linlin(0, 1, 0.2, 0.8)
-            ]);
-
-            decayTime = Select.kr(mode, [
-                // Mirror: spread = longer decay
-                spread.linlin(0, 1, baseDecayTime * 0.5, baseDecayTime * 2),
-                // Complement: spread = shorter decay
-                spread.linlin(0, 1, baseDecayTime * 2, baseDecayTime * 0.5),
-                // Transform: centroid controls
-                centroid.linlin(0, 1, baseDecayTime * 0.5, baseDecayTime * 1.5)
-            ]);
-
-            modRate = Select.kr(mode, [
-                baseModRate,
-                baseModRate,
-                centroid.linlin(0, 1, baseModRate * 0.5, baseModRate * 2)
-            ]);
-
-            modDepth = Select.kr(mode, [
-                baseModDepth,
-                baseModDepth,
-                spread.linlin(0, 1, baseModDepth * 0.5, baseModDepth * 2)
-            ]);
+            // Enhanced granular parameters for extreme mode
+            // Use smooth scaling instead of hard threshold
+            extremeFactor = grainIntensityMultiplier.linlin(1.0, 6.0, 1.0, 2.0).clip(1.0, 2.0);
+            grainDensity = grainDensity * extremeFactor;  // Extra density for extreme
+            grainSize = grainSize * grainIntensityMultiplier.linlin(1.0, 6.0, 1.0, 1.5).clip(1.0, 1.5);       // Larger size variation
+            pitchScatter = pitchScatter * grainIntensityMultiplier.linlin(1.0, 6.0, 1.0, 1.33).clip(1.0, 1.33); // More pitch variation
 
             Out.kr(filterGainsBus, filterGains.lag(0.1));
+            Out.kr(overdriveCtrlBus, [overdriveDrive, overdriveTone].clip(0, 1).lag(0.1));
             Out.kr(granularCtrlBus, [grainDensity, grainSize, pitchScatter, posScatter].lag(0.1));
-            Out.kr(reverbDelayCtrlBus, [reverbDelayBlend, decayTime, modRate, modDepth].lag(0.1));
         }).add;
     }
 
@@ -362,6 +418,40 @@ Chroma {
             filtered = (filtered * 0.5).tanh;
 
             Out.ar(outBus, filtered);
+        }).add;
+    }
+
+    loadOverdriveSynthDef {
+        SynthDef(\chroma_overdrive, { |inBus, outBus, ctrlBus, drive=0.5, tone=0.7, mix=0.0|
+            var sig, dry, wet, ctrl, modDrive, modTone;
+            var preGain, postGain, cutoff;
+
+            sig = In.ar(inBus);
+            dry = sig;
+
+            // Read modulated values from control bus
+            ctrl = In.kr(ctrlBus, 2);
+            modDrive = ctrl[0].lag(0.05);
+            modTone = ctrl[1].lag(0.05);
+
+            // Pre-gain based on drive (1x to 20x)
+            preGain = modDrive.linexp(0, 1, 1, 20);
+
+            // Soft clip with tanh
+            wet = (sig * preGain).tanh;
+
+            // Compensate output level
+            postGain = modDrive.linlin(0, 1, 1, 0.5);
+            wet = wet * postGain;
+
+            // Tone control: lowpass filter (500Hz to 12kHz)
+            cutoff = modTone.linexp(0, 1, 500, 12000);
+            wet = LPF.ar(wet, cutoff);
+
+            // Dry/wet mix
+            sig = XFade2.ar(dry, wet, mix.linlin(0, 1, -1, 1));
+
+            Out.ar(outBus, sig);
         }).add;
     }
 
@@ -421,18 +511,41 @@ Chroma {
         }).add;
     }
 
-    loadShimmerReverbSynthDef {
-        SynthDef(\chroma_shimmer_reverb, { |inBus, outBus, decayTime=3, shimmerPitch=12, mix=0.3|
-            var sig, dry, wet, shifted, verb;
-            var pitchRatio;
+    loadBitcrushSynthDef {
+        SynthDef(\chroma_bitcrush, { |inBus, outBus, bitDepth=8, sampleRate=11025, drive=0.5, mix=0.3|
+            var sig, dry, wet, crushed, driven;
+            var rateDivisor, quantization;
 
             sig = In.ar(inBus);
             dry = sig;
 
-            // Pitch ratio from semitones
-            pitchRatio = shimmerPitch.midiratio;
+            // Sample rate reduction
+            rateDivisor = SampleRate.ir / sampleRate;
+            crushed = Latch.ar(sig, Impulse.ar(sampleRate));
 
-            // Create shimmer through pitch-shifted feedback
+            // Bit depth reduction
+            quantization = (2.pow(bitDepth) - 1) / 2;
+            crushed = (crushed * quantization).round / quantization;
+
+            // Drive/distortion
+            driven = (crushed * (1 + drive * 19)).tanh;
+            driven = driven * (1 - drive * 0.3);  // Compensate gain
+
+            // Mix dry and wet
+            sig = XFade2.ar(dry, driven, mix.linlin(0, 1, -1, 1));
+
+            Out.ar(outBus, sig);
+        }).add;
+    }
+
+    loadReverbSynthDef {
+        SynthDef(\chroma_reverb, { |inBus, outBus, decayTime=3, mix=0.3|
+            var sig, dry, wet, verb;
+
+            sig = In.ar(inBus);
+            dry = sig;
+
+            // Create reverb with diffusion network
             verb = sig;
             verb = verb + LocalIn.ar(1);
 
@@ -441,17 +554,12 @@ Chroma {
                 verb = AllpassC.ar(verb, 0.05, { Rand(0.01, 0.05) }.dup(1).sum, decayTime * 0.3);
             };
 
-            // Pitch shift in feedback path
-            shifted = PitchShift.ar(verb, 0.2, pitchRatio, 0.01, 0.01) * 0.4;
+            LocalOut.ar(verb * (decayTime / 10).clip(0, 0.8));
 
-            // High-frequency damping
-            shifted = LPF.ar(shifted, 6000);
-
-            LocalOut.ar(shifted * (decayTime / 10).clip(0, 0.8));
-
-            // Final reverb tail
+            // Final reverb tail using FreeVerb
             wet = FreeVerb.ar(verb, 0.8, decayTime.linlin(0.5, 10, 0.5, 0.95), 0.5);
 
+            // Mix dry and wet
             sig = (dry * (1 - mix)) + (wet * mix);
 
             Out.ar(outBus, sig);
@@ -500,20 +608,17 @@ Chroma {
 
     loadOutputSynthDef {
         SynthDef(\chroma_output, { |inBus, granularBus, reverbBus, delayBus,
-            reverbDelayBlend=0.5, dryWet=0.5, outBus=0|
+            dryWet=0.5, outBus=0|
 
-            var dry, granular, reverb, delay, reverbDelay, wet, sig;
+            var dry, granular, reverb, delay, wet, sig;
 
             dry = In.ar(inBus);
             granular = In.ar(granularBus);
             reverb = In.ar(reverbBus);
             delay = In.ar(delayBus);
 
-            // Crossfade between reverb and delay
-            reverbDelay = XFade2.ar(reverb, delay, reverbDelayBlend * 2 - 1);
-
-            // Mix granular and reverb/delay (equal blend for now)
-            wet = (granular + reverbDelay) * 0.5;
+            // Mix all effects (reverb and delay are already gated by their mix controls)
+            wet = granular + reverb + delay;
 
             // Final dry/wet mix
             sig = XFade2.ar(dry, wet, dryWet * 2 - 1);
@@ -536,6 +641,12 @@ Chroma {
             \outBus, buses[\inputAudio],
             \ampBus, buses[\inputAmp]
         ]);
+
+        // Waveform recorder (capture input for oscilloscope)
+        synths[\waveformRecorder] = Synth(\chroma_waveform_recorder, [
+            \inBus, buses[\inputAudio],
+            \waveformBuf, waveformBuffer
+        ], synths[\input], \addAfter);
 
         // Input freeze (between input and analysis)
         synths[\inputFreeze] = Synth(\chroma_input_freeze, [
@@ -566,348 +677,363 @@ Chroma {
             \spreadBus, buses[\spread],
             \flatnessBus, buses[\flatness],
             \filterGainsBus, buses[\filterGains],
+            \overdriveCtrlBus, buses[\overdriveCtrl],
             \granularCtrlBus, buses[\granularCtrl],
-            \reverbDelayCtrlBus, buses[\reverbDelayCtrl],
             \baseFilterAmount, filterParams[\amount],
+            \baseOverdriveDrive, overdriveParams[\drive],
+            \baseOverdriveTone, overdriveParams[\tone],
             \baseGrainDensity, granularParams[\density],
             \baseGrainSize, granularParams[\size],
             \basePitchScatter, granularParams[\pitchScatter],
             \basePosScatter, granularParams[\posScatter],
-            \baseReverbDelayBlend, reverbDelayParams[\blend],
-            \baseDecayTime, reverbDelayParams[\decayTime],
-            \baseModRate, reverbDelayParams[\modRate],
-            \baseModDepth, reverbDelayParams[\modDepth]
+            \grainIntensityMultiplier, grainIntensity == \pronounced ? 3.0 : (grainIntensity == \extreme ? 6.0 : 1.0)
         ], synths[\analysis], \addAfter);
 
-        // Spectral filter (reads from frozen audio)
+        // Create all effects synths with initial connections (order-independent)
         synths[\filter] = Synth(\chroma_filter, [
-            \inBus, buses[\frozenAudio],
+            \inBus, buses[\filteredAudio],
             \outBus, buses[\filteredAudio],
             \gainsBus, buses[\filterGains],
-            \amount, filterParams[\amount],
+            \amount, if(filterParams[\enabled], { filterParams[\amount] }, { 0.0 }),
             \baseCutoff, filterParams[\cutoff],
             \resonance, filterParams[\resonance]
         ], synths[\blend], \addAfter);
 
-        // Granular (reads from filtered audio)
+        synths[\overdrive] = Synth(\chroma_overdrive, [
+            \inBus, buses[\overdriveAudio], 
+            \outBus, buses[\overdriveAudio],
+            \ctrlBus, buses[\overdriveCtrl],
+            \drive, overdriveParams[\drive],
+            \tone, overdriveParams[\tone],
+            \mix, if(overdriveParams[\enabled], { overdriveParams[\mix] }, { 0.0 })
+        ], synths[\blend], \addAfter);
+
+        synths[\bitcrush] = Synth(\chroma_bitcrush, [
+            \inBus, buses[\bitcrushAudio],
+            \outBus, buses[\bitcrushAudio],
+            \bitDepth, bitcrushParams[\bitDepth],
+            \sampleRate, bitcrushParams[\sampleRate],
+            \drive, bitcrushParams[\drive],
+            \mix, if(bitcrushParams[\enabled], { bitcrushParams[\mix] }, { 0.0 })
+        ], synths[\blend], \addAfter);
+
         synths[\granular] = Synth(\chroma_granular, [
-            \inBus, buses[\filteredAudio],
+            \inBus, buses[\granularAudio],
             \outBus, buses[\granularAudio],
             \grainBuf, grainBuffer,
             \freezeBuf, freezeBuffer,
             \ctrlBus, buses[\granularCtrl],
             \freeze, frozen.asInteger,
-            \mix, granularParams[\mix]
-        ], synths[\filter], \addAfter);
+            \mix, if(granularParams[\enabled], { granularParams[\mix] }, { 0.0 })
+        ], synths[\blend], \addAfter);
 
-        // Shimmer reverb (reads from filtered audio)
-        synths[\shimmerReverb] = Synth(\chroma_shimmer_reverb, [
-            \inBus, buses[\filteredAudio],
+        synths[\reverb] = Synth(\chroma_reverb, [
+            \inBus, buses[\reverbAudio],
             \outBus, buses[\reverbAudio],
-            \decayTime, reverbDelayParams[\decayTime],
-            \shimmerPitch, reverbDelayParams[\shimmerPitch],
-            \mix, reverbDelayParams[\mix]
-        ], synths[\granular], \addAfter);
+            \decayTime, reverbParams[\decayTime],
+            \mix, if(reverbParams[\enabled], { reverbParams[\mix] }, { 0.0 })
+        ], synths[\blend], \addAfter);
 
-        // Modulated delay (reads from filtered audio)
         synths[\modDelay] = Synth(\chroma_mod_delay, [
-            \inBus, buses[\filteredAudio],
+            \inBus, buses[\delayAudio],
             \outBus, buses[\delayAudio],
-            \delayTime, reverbDelayParams[\delayTime],
-            \decayTime, reverbDelayParams[\decayTime],
-            \modRate, reverbDelayParams[\modRate],
-            \modDepth, reverbDelayParams[\modDepth],
-            \mix, reverbDelayParams[\mix]
-        ], synths[\shimmerReverb], \addAfter);
+            \delayTime, delayParams[\delayTime],
+            \decayTime, delayParams[\decayTime],
+            \modRate, delayParams[\modRate],
+            \modDepth, delayParams[\modDepth],
+            \mix, if(delayParams[\enabled], { delayParams[\mix] }, { 0.0 })
+        ], synths[\blend], \addAfter);
 
         // Output mixer (at tail)
         synths[\output] = Synth(\chroma_output, [
-            \inBus, buses[\filteredAudio],
+            \inBus, buses[\overdriveAudio],
             \granularBus, buses[\granularAudio],
             \reverbBus, buses[\reverbAudio],
             \delayBus, buses[\delayAudio],
-            \reverbDelayBlend, reverbDelayParams[\blend],
             \dryWet, dryWet
         ], nil, \addToTail);
 
         // Map control buses
         synths[\granular].map(\ctrlBus, buses[\granularCtrl]);
+        
+        // Apply current effects order
+        this.reconnectEffects();
     }
 
-<<<<<<< HEAD
-    buildGUI {
-        var width = 650, height = 580;
-        var spectrumView, updateRoutine;
-        var bandData;
-
-        bandData = Array.fill(config[\numBands], 0);
-
-        window = Window("Chroma", Rect(100, 100, width, height))
-            .front
-            .onClose_({ this.class.stop });
-
-        window.view.decorator = FlowLayout(window.view.bounds, 10@10, 10@10);
-
-        // Title
-        StaticText(window, (width - 20)@30)
-            .string_("CHROMA")
-            .font_(Font("Helvetica", 24, true))
-            .align_(\center);
-
-        window.view.decorator.nextLine;
-
-        // Spectrum and blend mode row
-        StaticText(window, 300@20).string_("INPUT SPECTRUM").align_(\center);
-        StaticText(window, 300@20).string_("BLEND MODE").align_(\center);
-
-        window.view.decorator.nextLine;
-
-        // Spectrum display
-        spectrumView = UserView(window, 300@80)
-            .background_(Color.gray(0.2))
-            .drawFunc_({ |view|
-                var bounds = view.bounds;
-                var barWidth = bounds.width / config[\numBands];
-                Pen.fillColor = Color.new255(100, 149, 237);
-                config[\numBands].do { |i|
-                    var h = bandData[i] * bounds.height;
-                    Pen.fillRect(Rect(i * barWidth + 2, bounds.height - h, barWidth - 4, h));
-                };
-            });
-
-        // Blend mode buttons
-        View(window, 300@80).layout_(
-            VLayout(
-                HLayout(
-                    Button().states_([["Mirror", Color.black, Color.green]])
-                        .action_({ this.setBlendMode(\mirror); this.updateBlendButtons }),
-                    Button().states_([["Complement", Color.black, Color.white]])
-                        .action_({ this.setBlendMode(\complement); this.updateBlendButtons }),
-                    Button().states_([["Transform", Color.black, Color.white]])
-                        .action_({ this.setBlendMode(\transform); this.updateBlendButtons })
-                ).spacing_(5)
-            ).margins_(10)
-        );
-
-        window.view.children.last.children[0].children.do { |btn, i|
-            [\mirrorBtn, \complementBtn, \transformBtn][i].envirPut(btn);
-        };
-
-        window.view.decorator.nextLine;
-
-        // Input and Filter sections
-        StaticText(window, 300@20).string_("INPUT").font_(Font("Helvetica", 12, true));
-        StaticText(window, 300@20).string_("SPECTRAL FILTER").font_(Font("Helvetica", 12, true));
-
-        window.view.decorator.nextLine;
-
-        // Input controls
-        View(window, 300@100).layout_(
-            VLayout(
-                HLayout(
-                    StaticText().string_("Gain").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(0.5).action_({ |sl|
-                        this.setInputGain(sl.value * 2);
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Loop").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(inputFreezeLength.linlin(0.05, 0.5, 0, 1)).action_({ |sl|
-                        this.setInputFreezeLength(sl.value.linlin(0, 1, 0.05, 0.5));
-                    })
-                ),
-                Button().states_([
-                    ["INPUT FREEZE", Color.black, Color.white],
-                    ["INPUT FREEZE", Color.white, Color.red]
-                ]).action_({ |btn|
-                    this.toggleInputFreeze;
-                    btn.value = inputFrozen.asInteger;
-                })
-            ).margins_(5).spacing_(2)
-        );
-
-        // Filter controls
-        View(window, 300@90).layout_(
-            VLayout(
-                HLayout(
-                    StaticText().string_("Amount").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(filterParams[\amount]).action_({ |sl|
-                        this.setFilterAmount(sl.value);
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Cutoff").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(filterParams[\cutoff].linlin(200, 8000, 0, 1)).action_({ |sl|
-                        this.setFilterCutoff(sl.value.linlin(0, 1, 200, 8000));
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Resonance").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(filterParams[\resonance]).action_({ |sl|
-                        this.setFilterResonance(sl.value);
-                    })
-                )
-            ).margins_(5).spacing_(2)
-        );
-
-        window.view.decorator.nextLine;
-
-        // Granular and Reverb/Delay sections
-        StaticText(window, 300@20).string_("GRANULAR").font_(Font("Helvetica", 12, true));
-        StaticText(window, 300@20).string_("REVERB / DELAY").font_(Font("Helvetica", 12, true));
-
-        window.view.decorator.nextLine;
-
-        // Granular controls
-        View(window, 300@180).layout_(
-            VLayout(
-                HLayout(
-                    StaticText().string_("Density").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(granularParams[\density].linlin(1, 50, 0, 1)).action_({ |sl|
-                        this.setGrainDensity(sl.value.linlin(0, 1, 1, 50));
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Size").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(granularParams[\size].linlin(0.01, 0.5, 0, 1)).action_({ |sl|
-                        this.setGrainSize(sl.value.linlin(0, 1, 0.01, 0.5));
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Pitch").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(granularParams[\pitchScatter]).action_({ |sl|
-                        this.setGrainPitchScatter(sl.value);
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Position").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(granularParams[\posScatter]).action_({ |sl|
-                        this.setGrainPosScatter(sl.value);
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Mix").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(granularParams[\mix]).action_({ |sl|
-                        this.setGranularMix(sl.value);
-                    })
-                ),
-                Button().states_([
-                    ["GRAIN FREEZE", Color.black, Color.white],
-                    ["GRAIN FREEZE", Color.white, Color.green]
-                ]).action_({ |btn|
-                    this.toggleGranularFreeze;
-                    btn.value = frozen.asInteger;
-                })
-            ).margins_(5).spacing_(2)
-        );
-
-        // Reverb/Delay controls
-        View(window, 300@180).layout_(
-            VLayout(
-                HLayout(
-                    StaticText().string_("Rev<>Dly").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\blend]).action_({ |sl|
-                        this.setReverbDelayBlend(sl.value);
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Decay").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\decayTime].linlin(0.5, 10, 0, 1)).action_({ |sl|
-                        this.setDecayTime(sl.value.linlin(0, 1, 0.5, 10));
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Shimmer").fixedWidth_(60),
-                    PopUpMenu().items_(["0 (off)", "+5 (4th)", "+7 (5th)", "+12 (oct)"])
-                        .value_(#[0, 5, 7, 12].indexOf(reverbDelayParams[\shimmerPitch]) ?? 3)
-                        .action_({ |menu|
-                            this.setShimmerPitch(#[0, 5, 7, 12][menu.value]);
-                        })
-                ),
-                HLayout(
-                    StaticText().string_("Delay").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\delayTime].linlin(0.1, 1, 0, 1)).action_({ |sl|
-                        this.setDelayTime(sl.value.linlin(0, 1, 0.1, 1));
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Mod Rate").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\modRate].linlin(0.1, 5, 0, 1)).action_({ |sl|
-                        this.setModRate(sl.value.linlin(0, 1, 0.1, 5));
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Mod Depth").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\modDepth]).action_({ |sl|
-                        this.setModDepth(sl.value);
-                    })
-                ),
-                HLayout(
-                    StaticText().string_("Mix").fixedWidth_(60),
-                    Slider().orientation_(\horizontal).value_(reverbDelayParams[\mix]).action_({ |sl|
-                        this.setReverbDelayMix(sl.value);
-                    })
-                )
-            ).margins_(5).spacing_(2)
-        );
-
-        window.view.decorator.nextLine;
-
-        // Output section
-        StaticText(window, (width - 20)@20).string_("OUTPUT").font_(Font("Helvetica", 12, true));
-
-        window.view.decorator.nextLine;
-
-        View(window, (width - 20)@40).layout_(
-            HLayout(
-                StaticText().string_("Dry/Wet").fixedWidth_(60),
-                Slider().orientation_(\horizontal).value_(dryWet).action_({ |sl|
-                    this.setDryWet(sl.value);
-                })
-            ).margins_(5)
-        );
-
-        // Spectrum update routine
-        updateRoutine = Routine({
-            loop {
-                buses[\bands].getn(config[\numBands], { |vals|
-                    bandData = vals;
-                    { spectrumView.refresh }.defer;
-                });
-                0.033.wait;
-            }
-        }).play(AppClock);
-
-        window.onClose = window.onClose.addFunc({
-            updateRoutine.stop;
-        });
-    }
-
-    updateBlendButtons {
-        var buttons = [\mirrorBtn, \complementBtn, \transformBtn];
-        var modes = [\mirror, \complement, \transform];
-        buttons.do { |key, i|
-            var btn = key.envirGet;
-            if(btn.notNil) {
-                if(modes[i] == blendMode) {
-                    btn.states_([[btn.states[0][0], Color.black, Color.green]]);
+    reconnectEffects {
+        var prevEffect = \blend;
+        var lastEffect, lastBus;
+        
+        // Connect effects in order
+        effectsOrder.do { |effectName, i|
+            var synth = synths[effectName];
+            if (synth.notNil) {
+                // Move synth to follow previous effect
+                synth.moveAfter(synths[prevEffect]);
+                
+                // Update synth input/output buses based on position
+                if (i == 0) {
+                    // First effect reads from filtered audio bus
+                    synth.set(\inBus, buses[\filteredAudio]);
                 } {
-                    btn.states_([[btn.states[0][0], Color.black, Color.white]]);
+                    // Subsequent effects read from previous effect
+                    var prevBus = this.getEffectOutputBus(effectsOrder[i-1]);
+                    synth.set(\inBus, prevBus);
                 };
-            };
+                
+                prevEffect = effectName;
+            }
         };
+        
+        // Ensure output synth reads from last effect correctly
+        lastEffect = effectsOrder.last;
+        lastBus = this.getEffectOutputBus(lastEffect);
+        synths[\output].set(\inBus, lastBus);
     }
 
-=======
->>>>>>> 3fc2606 (Remove GUI, make SuperCollider engine headless-only)
+    getEffectOutputBus { |effectName|
+        // Return the output bus for each effect type
+        switch (effectName,
+            \filter, { buses[\filteredAudio] },
+            \overdrive, { buses[\overdriveAudio] },
+            \bitcrush, { buses[\bitcrushAudio] },
+            \granular, { buses[\granularAudio] },
+            \reverb, { buses[\reverbAudio] },
+            \delay, { buses[\delayAudio] },
+            { buses[\filteredAudio] } // fallback
+        );
+    }
+
     cleanup {
+
+        this.cleanupOSC;
         synths.do(_.free);
         buses.do(_.free);
         fftBuffer.free;
         grainBuffer.free;
         freezeBuffer.free;
         inputFreezeBuffer.free;
+        waveformBuffer.free;
         "Chroma stopped".postln;
+    }
+
+    setupOSC { |replyPort=9000|
+        var replyAddr = NetAddr("127.0.0.1", replyPort);
+
+        // Input controls
+        OSCdef(\chromaGain, { |msg|
+            this.setInputGain(msg[1]);
+
+        }, '/chroma/gain');
+        OSCdef(\chromaInputFreeze, { |msg|
+            if(msg[1].asBoolean != inputFrozen) { this.toggleInputFreeze };
+
+        }, '/chroma/inputFreeze');
+        OSCdef(\chromaInputFreezeLength, { |msg|
+            this.setInputFreezeLength(msg[1]);
+
+        }, '/chroma/inputFreezeLength');
+
+        // Filter controls
+        OSCdef(\chromaFilterEnabled, { |msg|
+            this.setFilterEnabled(msg[1].asBoolean);
+
+        }, '/chroma/filterEnabled');
+        OSCdef(\chromaFilterAmount, { |msg|
+            this.setFilterAmount(msg[1]);
+
+        }, '/chroma/filterAmount');
+        OSCdef(\chromaFilterCutoff, { |msg|
+            this.setFilterCutoff(msg[1]);
+
+        }, '/chroma/filterCutoff');
+        OSCdef(\chromaFilterResonance, { |msg|
+            this.setFilterResonance(msg[1]);
+
+        }, '/chroma/filterResonance');
+
+        // Overdrive controls
+        OSCdef(\chromaOverdriveEnabled, { |msg|
+            this.setOverdriveEnabled(msg[1].asBoolean);
+
+        }, '/chroma/overdriveEnabled');
+        OSCdef(\chromaOverdriveDrive, { |msg|
+            this.setOverdriveDrive(msg[1]);
+
+        }, '/chroma/overdriveDrive');
+        OSCdef(\chromaOverdriveTone, { |msg|
+            this.setOverdriveTone(msg[1]);
+
+        }, '/chroma/overdriveTone');
+        OSCdef(\chromaOverdriveMix, { |msg|
+            this.setOverdriveMix(msg[1]);
+
+        }, '/chroma/overdriveMix');
+
+        // Granular controls
+        OSCdef(\chromaGranularEnabled, { |msg|
+            this.setGranularEnabled(msg[1].asBoolean);
+
+        }, '/chroma/granularEnabled');
+        OSCdef(\chromaGranularDensity, { |msg|
+            this.setGrainDensity(msg[1]);
+
+        }, '/chroma/granularDensity');
+        OSCdef(\chromaGranularSize, { |msg|
+            this.setGrainSize(msg[1]);
+
+        }, '/chroma/granularSize');
+        OSCdef(\chromaGranularPitchScatter, { |msg|
+            this.setGrainPitchScatter(msg[1]);
+
+        }, '/chroma/granularPitchScatter');
+        OSCdef(\chromaGranularPosScatter, { |msg|
+            this.setGrainPosScatter(msg[1]);
+
+        }, '/chroma/granularPosScatter');
+        OSCdef(\chromaGranularMix, { |msg|
+            this.setGranularMix(msg[1]);
+
+        }, '/chroma/granularMix');
+        OSCdef(\chromaGranularFreeze, { |msg|
+            if(msg[1].asBoolean != frozen) { this.toggleGranularFreeze };
+
+        }, '/chroma/granularFreeze');
+        OSCdef(\chromaGrainIntensity, { |msg|
+            this.setGrainIntensity(msg[1].asSymbol);
+
+        }, '/chroma/grainIntensity');
+
+        // Bitcrushing controls
+        OSCdef(\chromaBitcrushEnabled, { |msg|
+            this.setBitcrushEnabled(msg[1].asBoolean);
+
+        }, '/chroma/bitcrushEnabled');
+        OSCdef(\chromaBitDepth, { |msg|
+            this.setBitDepth(msg[1]);
+
+        }, '/chroma/bitDepth');
+        OSCdef(\chromaBitcrushSampleRate, { |msg|
+            this.setBitcrushSampleRate(msg[1]);
+
+        }, '/chroma/bitcrushSampleRate');
+        OSCdef(\chromaBitcrushDrive, { |msg|
+            this.setBitcrushDrive(msg[1]);
+
+        }, '/chroma/bitcrushDrive');
+        OSCdef(\chromaBitcrushMix, { |msg|
+            this.setBitcrushMix(msg[1]);
+
+        }, '/chroma/bitcrushMix');
+
+        // Reverb controls
+        OSCdef(\chromaReverbEnabled, { |msg|
+            this.setReverbEnabled(msg[1].asBoolean);
+
+        }, '/chroma/reverbEnabled');
+        OSCdef(\chromaReverbDecayTime, { |msg|
+            this.setReverbDecayTime(msg[1]);
+
+        }, '/chroma/reverbDecayTime');
+        OSCdef(\chromaReverbMix, { |msg|
+            this.setReverbMix(msg[1]);
+
+        }, '/chroma/reverbMix');
+
+        // Delay controls
+        OSCdef(\chromaDelayEnabled, { |msg|
+            this.setDelayEnabled(msg[1].asBoolean);
+
+        }, '/chroma/delayEnabled');
+        OSCdef(\chromaDelayTime, { |msg|
+            this.setDelayTime(msg[1]);
+
+        }, '/chroma/delayTime');
+        OSCdef(\chromaDelayDecayTime, { |msg|
+            this.setDelayDecayTime(msg[1]);
+
+        }, '/chroma/delayDecayTime');
+        OSCdef(\chromaModRate, { |msg|
+            this.setModRate(msg[1]);
+
+        }, '/chroma/modRate');
+        OSCdef(\chromaModDepth, { |msg|
+            this.setModDepth(msg[1]);
+
+        }, '/chroma/modDepth');
+        OSCdef(\chromaDelayMix, { |msg|
+            this.setDelayMix(msg[1]);
+
+        }, '/chroma/delayMix');
+
+        // Global controls
+        OSCdef(\chromaBlendMode, { |msg|
+            var modes = [\mirror, \complement, \transform];
+            this.setBlendMode(modes[msg[1].asInteger.clip(0, 2)]);
+
+        }, '/chroma/blendMode');
+        OSCdef(\chromaDryWet, { |msg|
+            this.setDryWet(msg[1]);
+
+        }, '/chroma/dryWet');
+
+        // Effects order controls
+        OSCdef(\chromaEffectsOrder, { |msg|
+            var newOrder = msg[1..];
+            this.setEffectsOrder(newOrder);
+
+        }, '/chroma/effectsOrder');
+
+
+
+
+
+
+
+        "Chroma OSC responders ready".postln;
+    }
+
+
+
+    cleanupOSC {
+        OSCdef(\chromaGain).free;
+        OSCdef(\chromaInputFreeze).free;
+        OSCdef(\chromaInputFreezeLength).free;
+        OSCdef(\chromaFilterEnabled).free;
+        OSCdef(\chromaFilterAmount).free;
+        OSCdef(\chromaFilterCutoff).free;
+        OSCdef(\chromaFilterResonance).free;
+        OSCdef(\chromaOverdriveEnabled).free;
+        OSCdef(\chromaOverdriveDrive).free;
+        OSCdef(\chromaOverdriveTone).free;
+        OSCdef(\chromaOverdriveMix).free;
+        OSCdef(\chromaGranularEnabled).free;
+        OSCdef(\chromaGranularDensity).free;
+        OSCdef(\chromaGranularSize).free;
+        OSCdef(\chromaGranularPitchScatter).free;
+        OSCdef(\chromaGranularPosScatter).free;
+        OSCdef(\chromaGranularMix).free;
+        OSCdef(\chromaGranularFreeze).free;
+        OSCdef(\chromaGrainIntensity).free;
+        OSCdef(\chromaBitcrushEnabled).free;
+        OSCdef(\chromaBitDepth).free;
+        OSCdef(\chromaBitcrushSampleRate).free;
+        OSCdef(\chromaBitcrushDrive).free;
+        OSCdef(\chromaBitcrushMix).free;
+        OSCdef(\chromaReverbEnabled).free;
+        OSCdef(\chromaReverbDecayTime).free;
+        OSCdef(\chromaReverbMix).free;
+        OSCdef(\chromaDelayEnabled).free;
+        OSCdef(\chromaDelayTime).free;
+        OSCdef(\chromaDelayDecayTime).free;
+        OSCdef(\chromaModRate).free;
+        OSCdef(\chromaModDepth).free;
+        OSCdef(\chromaDelayMix).free;
+        OSCdef(\chromaEffectsOrder).free;
+        OSCdef(\chromaGetEffectsOrder).free;
+        OSCdef(\chromaBlendMode).free;
+        OSCdef(\chromaDryWet).free;
+        OSCdef(\chromaSync).free;
     }
 
     blendModeIndex {
@@ -929,6 +1055,7 @@ Chroma {
     }
 
     setInputGain { |gain|
+        inputGain = gain;
         if(synths[\input].notNil) {
             synths[\input].set(\gain, gain);
         };
@@ -959,9 +1086,18 @@ Chroma {
         };
     }
 
+    setFilterEnabled { |enabled|
+        filterParams[\enabled] = enabled;
+        if(synths[\filter].notNil) {
+            synths[\filter].set(\amount, if(enabled, { filterParams[\amount] }, { 0.0 }));
+        };
+    }
+
     setFilterAmount { |val|
         filterParams[\amount] = val.clip(0, 1);
-        if(synths[\filter].notNil) { synths[\filter].set(\amount, val) };
+        if(synths[\filter].notNil && { filterParams[\enabled] }) {
+            synths[\filter].set(\amount, val);
+        };
         if(synths[\blend].notNil) { synths[\blend].set(\baseFilterAmount, val) };
     }
 
@@ -973,6 +1109,39 @@ Chroma {
     setFilterResonance { |val|
         filterParams[\resonance] = val.clip(0, 1);
         if(synths[\filter].notNil) { synths[\filter].set(\resonance, val) };
+    }
+
+    setOverdriveEnabled { |enabled|
+        overdriveParams[\enabled] = enabled;
+        if(synths[\overdrive].notNil) {
+            synths[\overdrive].set(\mix, if(enabled, { overdriveParams[\mix] }, { 0.0 }));
+        };
+    }
+
+    setOverdriveDrive { |val|
+        overdriveParams[\drive] = val.clip(0, 1);
+        if(synths[\overdrive].notNil) { synths[\overdrive].set(\drive, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseOverdriveDrive, val) };
+    }
+
+    setOverdriveTone { |val|
+        overdriveParams[\tone] = val.clip(0, 1);
+        if(synths[\overdrive].notNil) { synths[\overdrive].set(\tone, val) };
+        if(synths[\blend].notNil) { synths[\blend].set(\baseOverdriveTone, val) };
+    }
+
+    setOverdriveMix { |val|
+        overdriveParams[\mix] = val.clip(0, 1);
+        if(synths[\overdrive].notNil && { overdriveParams[\enabled] }) {
+            synths[\overdrive].set(\mix, val);
+        };
+    }
+
+    setGranularEnabled { |enabled|
+        granularParams[\enabled] = enabled;
+        if(synths[\granular].notNil) {
+            synths[\granular].set(\mix, if(enabled, { granularParams[\mix] }, { 0.0 }));
+        };
     }
 
     setGrainDensity { |val|
@@ -997,54 +1166,111 @@ Chroma {
 
     setGranularMix { |val|
         granularParams[\mix] = val.clip(0, 1);
-        if(synths[\granular].notNil) { synths[\granular].set(\mix, val) };
+        if(synths[\granular].notNil && { granularParams[\enabled] }) {
+            synths[\granular].set(\mix, val);
+        };
     }
 
-    setReverbDelayBlend { |val|
-        reverbDelayParams[\blend] = val.clip(0, 1);
-        if(synths[\output].notNil) { synths[\output].set(\reverbDelayBlend, val) };
-        if(synths[\blend].notNil) { synths[\blend].set(\baseReverbDelayBlend, val) };
-    }
 
-    setDecayTime { |val|
-        reverbDelayParams[\decayTime] = val.clip(0.5, 10);
-        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\decayTime, val) };
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\decayTime, val) };
-        if(synths[\blend].notNil) { synths[\blend].set(\baseDecayTime, val) };
-    }
-
-    setShimmerPitch { |val|
-        reverbDelayParams[\shimmerPitch] = val;
-        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\shimmerPitch, val) };
-    }
-
-    setDelayTime { |val|
-        reverbDelayParams[\delayTime] = val.clip(0.1, 1);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\delayTime, val) };
-    }
-
-    setModRate { |val|
-        reverbDelayParams[\modRate] = val.clip(0.1, 5);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modRate, val) };
-        if(synths[\blend].notNil) { synths[\blend].set(\baseModRate, val) };
-    }
-
-    setModDepth { |val|
-        reverbDelayParams[\modDepth] = val.clip(0, 1);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modDepth, val) };
-        if(synths[\blend].notNil) { synths[\blend].set(\baseModDepth, val) };
-    }
 
     setGrainIntensity { |mode|
-        grainIntensity = mode;
+        var validModes = grainIntensityMultipliers.keys;
+        var validMode = validModes.includes(mode).if({ mode }, { \subtle });
+        
+        if(validMode != mode) {
+            "Invalid grainIntensity mode: %. Using subtle".format(mode).warn;
+        };
+        
+        grainIntensity = validMode;
         if(synths[\blend].notNil) { 
-            synths[\blend].set(\grainIntensityMultiplier, mode == \pronounced ? 3.0 : 1.0);
+            synths[\blend].set(\grainIntensityMultiplier, grainIntensityMultipliers[validMode]);
         }
     }
 
-    setReverbDelayMix { |val|
-        reverbDelayParams[\mix] = val.clip(0, 1);
-        if(synths[\shimmerReverb].notNil) { synths[\shimmerReverb].set(\mix, val) };
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\mix, val) };
+    // Bitcrushing controls
+    setBitcrushEnabled { |enabled|
+        bitcrushParams[\enabled] = enabled;
+        if(synths[\bitcrush].notNil) { 
+            synths[\bitcrush].set(\mix, if(enabled, { bitcrushParams[\mix] }, { 0.0 }));
+        };
     }
+
+    setBitDepth { |val|
+        bitcrushParams[\bitDepth] = val.clip(4, 16);
+        if(synths[\bitcrush].notNil) { synths[\bitcrush].set(\bitDepth, val) };
+    }
+
+    setBitcrushSampleRate { |val|
+        bitcrushParams[\sampleRate] = val.clip(1000, 44100);
+        if(synths[\bitcrush].notNil) { synths[\bitcrush].set(\sampleRate, val) };
+    }
+
+    setBitcrushDrive { |val|
+        bitcrushParams[\drive] = val.clip(0, 1);
+        if(synths[\bitcrush].notNil) { synths[\bitcrush].set(\drive, val) };
+    }
+
+    setBitcrushMix { |val|
+        bitcrushParams[\mix] = val.clip(0, 1);
+        if(synths[\bitcrush].notNil && { bitcrushParams[\enabled] }) { 
+            synths[\bitcrush].set(\mix, val);
+        };
+    }
+
+    // Reverb controls
+    setReverbEnabled { |enabled|
+        reverbParams[\enabled] = enabled;
+        if(synths[\reverb].notNil) { 
+            synths[\reverb].set(\mix, if(enabled, { reverbParams[\mix] }, { 0.0 }));
+        };
+    }
+
+    setReverbDecayTime { |val|
+        reverbParams[\decayTime] = val.clip(0.5, 10);
+        if(synths[\reverb].notNil) { synths[\reverb].set(\decayTime, val) };
+    }
+
+    setReverbMix { |val|
+        reverbParams[\mix] = val.clip(0, 1);
+        if(synths[\reverb].notNil && { reverbParams[\enabled] }) { 
+            synths[\reverb].set(\mix, val);
+        };
+    }
+
+    // Delay controls
+    setDelayEnabled { |enabled|
+        delayParams[\enabled] = enabled;
+        if(synths[\modDelay].notNil) { 
+            synths[\modDelay].set(\mix, if(enabled, { delayParams[\mix] }, { 0.0 }));
+        };
+    }
+
+    setDelayTime { |val|
+        delayParams[\delayTime] = val.clip(0.1, 1);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\delayTime, val) };
+    }
+
+    setDelayDecayTime { |val|
+        delayParams[\decayTime] = val.clip(0.5, 10);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\decayTime, val) };
+    }
+
+    setModRate { |val|
+        delayParams[\modRate] = val.clip(0.1, 5);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modRate, val) };
+    }
+
+    setModDepth { |val|
+        delayParams[\modDepth] = val.clip(0, 1);
+        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modDepth, val) };
+    }
+
+    setDelayMix { |val|
+        delayParams[\mix] = val.clip(0, 1);
+        if(synths[\modDelay].notNil && { delayParams[\enabled] }) { 
+            synths[\modDelay].set(\mix, val);
+        };
+    }
+
+
 }
