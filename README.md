@@ -2,11 +2,13 @@
 
 A SuperCollider-based audio effects engine providing real-time audio processing with multiple configurable effects, spectral analysis, and flexible parameter control via Open Sound Control (OSC).
 
+**Note**: This repository contains the SuperCollider audio engine only. For a terminal user interface, see [chroma-tui](https://github.com/renderorange/chroma-tui).
+
 ## Features
 
 ### Audio Effects
 - **Multi-mode Filter** - Cutoff, resonance, and amount control
-- **Overdrive** - Saturation/distortion with drive, tone, and mix parameters  
+- **Overdrive** - Saturation/distortion with drive, tone, bias, and mix parameters  
 - **Bitcrush** - Bit reduction and sample rate manipulation
 - **Granular Processor** - Density, size, and scatter controls with freeze capability
 - **Reverb** - Algorithmic reverb with decay time control
@@ -68,11 +70,6 @@ sudo cp Chroma.sc ~/Library/Application\ Support/SuperCollider/Extensions/
 # Or copy to user extensions directory:
 mkdir -p ~/.local/share/SuperCollider/Extensions/
 cp Chroma.sc ~/.local/share/SuperCollider/Extensions/
-```
-
-3. Verify installation:
-```bash
-./test_compilation.sh
 ```
 
 ## Usage
@@ -163,21 +160,30 @@ n.sendMsg("/chroma/getEffectsOrder");
 
 ## Testing
 
-### Run Test Suite
+### Headless Tests (No Audio Hardware Required)
 
-**All Tests:**
+Run the test suite that validates code structure, syntax, and component definitions without requiring audio hardware:
+
 ```bash
-./test_compilation.sh          # Syntax and compilation
-./test_headless.sh            # Headless functionality
-./test_synths.scd             # SynthDef testing (run with sclang)
-./functional_full_workflow.sh   # Complete workflow test
+./test/run_lint_tests.sh    # Run lint tests
 ```
 
-**Individual Tests:**
+This test suite checks:
+- File structure validation
+- Syntax validation (braces, parentheses, brackets balanced)
+- Required methods present
+- OSC handlers defined
+- SynthDef definitions
+- Audio effect parameters
+- Bus allocation
+- Documentation files
+- Code quality checks
+
+### Full Test Suite (Requires Audio Hardware)
+
+**Interactive Test Runner:**
 ```bash
-./test_syntax.sh              # Syntax validation
-./test_effects_order_osc.scd  # OSC effects order testing
-./test_pronounced_mode.scd    # Granular pronounced mode
+./test/run_full_tests.sh    # Interactive test runner (requires JACK audio)
 ```
 
 ### Manual Testing
@@ -239,6 +245,16 @@ Audio Input → Analysis → Effects Chain → Audio Output
             Real-time Processing
 ```
 
+### Connection Model
+
+Chroma uses **stateless OSC over UDP** for parameter control.
+
+- **No Connection State**: UDP is connectionless - there is no persistent connection to maintain
+- **Server Independence**: The SuperCollider audio server continues processing audio with last-known parameters regardless of client connectivity
+- **Simple Integration**: OSC clients simply send messages to control parameters; no handshake or connection management needed
+
+**Note**: There is no automatic reconnection logic by design. If your client disconnects, simply start sending OSC messages again when ready. The server maintains the last-known parameter state.
+
 **Effects Chain Order (configurable):**
 1. Input Analysis & Freeze
 2. Multi-mode Filter
@@ -251,16 +267,22 @@ Audio Input → Analysis → Effects Chain → Audio Output
 
 ## Development
 
+**To verify your changes:**
+```bash
+# Run lint tests to validate code structure and syntax
+./test/run_lint_tests.sh
+
+# All tests should pass before submitting changes
+```
+
 ### Project Structure
 ```
 chroma/
-├── Chroma.sc                 # Main SuperCollider class
-├── startup.scd               # SuperCollider startup script
-├── run.sh                   # Launch script with JACK setup
-├── test_*.sh                # Test scripts
-├── test_*.scd               # SuperCollider test files
-├── functional_full_workflow.sh # Integration tests
-└── README.md               # This file
+├── Chroma.sc      # Main SuperCollider class
+├── startup.scd    # SuperCollider startup script
+├── run.sh         # Launch script with JACK setup
+├── test/          # Test suite
+└── README.md      # This file
 ```
 
 ### Modifying Chroma

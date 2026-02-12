@@ -24,6 +24,7 @@ Chroma {
     var <>grainIntensity = \subtle;
     var <grainIntensityMultipliers;  // Dictionary for intensity multiplier constants
     var <effectsOrder;  // Array of effect symbols in processing order
+    var <debugLevel;
 
     *new { |server|
         ^super.new.init(server);
@@ -93,19 +94,56 @@ Chroma {
             mix: 0.3
         );
         effectsOrder = [\filter, \overdrive, \bitcrush, \granular, \reverb, \delay];
+        debugLevel = 0;
         ^this;
+    }
+
+    log { |level, msg|
+        if(debugLevel >= level) {
+            ("Chroma: " ++ msg).postln;
+        };
+    }
+
+    traceSignalStage { |stage, signal|
+        if(debugLevel >= 2) {
+            var level;
+            if(signal.isKindOf(Bus)) {
+                level = 0;
+            } {
+                level = signal.abs.max(0.01).lag(0.1);
+            };
+            ("[SIGNAL] %: level=%.3f, active=%".format(stage, level, level > 0.001)).postln;
+        };
+    }
+
+    traceBusActivity { |busName|
+        if(debugLevel >= 2) {
+            var bus = buses[busName];
+            if(bus.notNil) {
+                ("[BUS] % allocated (index: %)".format(busName, bus.index)).postln;
+            } {
+                ("[BUS] %: NOT ALLOCATED".format(busName)).error;
+            };
+        };
+    }
+
+    setDebugLevel { |level|
+        var levelNames = ["off", "basic", "verbose"];
+        debugLevel = level.clip(0, 2);
+        this.log(1, "Debug level set to % (%)".format(debugLevel, levelNames[debugLevel]));
     }
 
     *initClass {
         instance = nil;
     }
 
-    *start { |server|
+    *start { |server, debug=0|
         if(instance.notNil) {
             "Chroma already running".warn;
             ^instance;
         };
         instance = Chroma(server);
+        instance.setDebugLevel(debug);
         instance.boot;
         ^instance;
     }
@@ -119,12 +157,17 @@ Chroma {
 
     boot {
         server.waitForBoot {
+            this.log(1, "Booting...");
             this.allocateResources;
-            server.sync;  // Ensure buffer is allocated before SynthDefs use it
+            this.log(1, "Resources allocated");
+            server.sync;
             this.loadSynthDefs;
+            this.log(1, "SynthDefs loaded");
             server.sync;
             this.createSynths;
+            this.log(1, "Synths created");
             this.setupOSC;
+            this.log(1, "OSC responders ready");
             "Chroma ready".postln;
         };
     }
@@ -152,13 +195,20 @@ Chroma {
         // Audio bus for analyzed signal
         buses[\inputAudio] = Bus.audio(server, 1);
 
-        // Effect audio buses
+        // Effect audio buses - separate intermediate buses for proper chaining
         buses[\filteredAudio] = Bus.audio(server, 1);
         buses[\overdriveAudio] = Bus.audio(server, 1);
         buses[\bitcrushAudio] = Bus.audio(server, 1);
         buses[\granularAudio] = Bus.audio(server, 1);
         buses[\reverbAudio] = Bus.audio(server, 1);
         buses[\delayAudio] = Bus.audio(server, 1);
+
+        // Intermediate effect buses for proper signal chain routing
+        buses[\filterToOverdrive] = Bus.audio(server, 1);
+        buses[\overdriveToBitcrush] = Bus.audio(server, 1);
+        buses[\bitcrushToGranular] = Bus.audio(server, 1);
+        buses[\granularToReverb] = Bus.audio(server, 1);
+        buses[\reverbToDelay] = Bus.audio(server, 1);
 
         // Effect control buses
         buses[\filterGains] = Bus.control(server, 8);
@@ -176,6 +226,9 @@ Chroma {
 
         // Bus for frozen audio output
         buses[\frozenAudio] = Bus.audio(server, 1);
+
+        this.log(2, "Buses allocated: frozenAudio=%, filteredAudio=%, granularAudio=%".format(
+            buses[\frozenAudio].index, buses[\filteredAudio].index, buses[\granularAudio].index));
     }
 
     loadSynthDefs {
@@ -190,6 +243,17 @@ Chroma {
         this.loadReverbSynthDef;
         this.loadModDelaySynthDef;
         this.loadOutputSynthDef;
+    }
+
+    validateInputChannel { |channel|
+        if(server.options.numInputBusChannels <= channel) {
+            "ERROR: Input channel % not available!".format(channel).error;
+            "Available input channels: %".format(server.options.numInputBusChannels).postln;
+            "Chroma stopping due to input configuration error.".error;
+            this.cleanup();
+            Error.throw;
+        };
+        this.log(1, "Input channel % validated".format(channel));
     }
 
     loadInputSynthDef {
@@ -610,21 +674,25 @@ Chroma {
         }).add;
     }
 
+    validateOutputBus { |outBus|
+        if(server.options.numOutputBusChannels <= outBus) {
+            "ERROR: Output bus % not available!".format(outBus).error;
+            "Available output channels: %".format(server.options.numOutputBusChannels).postln;
+            "Chroma stopping due to output configuration error.".error;
+            this.cleanup();
+            Error.throw;
+        };
+        this.log(1, "Output bus % validated".format(outBus));
+    }
+
     loadOutputSynthDef {
-        SynthDef(\chroma_output, { |inBus, granularBus, reverbBus, delayBus,
-            dryWet=0.5, outBus=0|
+        SynthDef(\chroma_output, { |dryBus, wetBus, dryWet=0.5, outBus=0|
+            var dry, wet, sig;
 
-            var dry, granular, reverb, delay, wet, sig;
+            dry = In.ar(dryBus);
+            wet = In.ar(wetBus);
 
-            dry = In.ar(inBus);
-            granular = In.ar(granularBus);
-            reverb = In.ar(reverbBus);
-            delay = In.ar(delayBus);
-
-            // Mix all effects (reverb and delay are already gated by their mix controls)
-            wet = granular + reverb + delay;
-
-            // Final dry/wet mix
+            // Final dry/wet crossfade
             sig = XFade2.ar(dry, wet, dryWet * 2 - 1);
 
             // Stereo output with slight widening
@@ -638,15 +706,20 @@ Chroma {
     }
 
     createSynths {
+        // Validate input channel before creating input synth
+        this.validateInputChannel(config[\inputChannel]);
+
         // Input stage
+        this.traceBusActivity(\inputAudio);
+        this.traceBusActivity(\inputAmp);
+        this.log(2, "Creating input synth for channel %".format(config[\inputChannel]));
         synths[\input] = Synth(\chroma_input, [
             \inChannel, config[\inputChannel],
             \gain, 1,
             \outBus, buses[\inputAudio],
             \ampBus, buses[\inputAmp]
         ]);
-
-        
+        this.traceSignalStage(\input, buses[\inputAudio]);
 
         // Input freeze (between input and analysis)
         synths[\inputFreeze] = Synth(\chroma_input_freeze, [
@@ -690,10 +763,10 @@ Chroma {
             \grainIntensityMultiplier, grainIntensity == \pronounced ? 3.0 : (grainIntensity == \extreme ? 6.0 : 1.0)
         ], synths[\analysis], \addAfter);
 
-        // Create all effects synths with initial connections (order-independent)
+        // create all effects synths with proper intermediate bus routing
         synths[\filter] = Synth(\chroma_filter, [
             \inBus, buses[\filteredAudio],
-            \outBus, buses[\filteredAudio],
+            \outBus, buses[\filterToOverdrive],
             \gainsBus, buses[\filterGains],
             \amount, if(filterParams[\enabled], { filterParams[\amount] }, { 0.0 }),
             \baseCutoff, filterParams[\cutoff],
@@ -701,8 +774,8 @@ Chroma {
         ], synths[\blend], \addAfter);
 
         synths[\overdrive] = Synth(\chroma_overdrive, [
-            \inBus, buses[\overdriveAudio], 
-            \outBus, buses[\overdriveAudio],
+            \inBus, buses[\filterToOverdrive],
+            \outBus, buses[\overdriveToBitcrush],
             \ctrlBus, buses[\overdriveCtrl],
             \drive, overdriveParams[\drive],
             \tone, overdriveParams[\tone],
@@ -711,8 +784,8 @@ Chroma {
         ], synths[\blend], \addAfter);
 
         synths[\bitcrush] = Synth(\chroma_bitcrush, [
-            \inBus, buses[\bitcrushAudio],
-            \outBus, buses[\bitcrushAudio],
+            \inBus, buses[\overdriveToBitcrush],
+            \outBus, buses[\bitcrushToGranular],
             \bitDepth, bitcrushParams[\bitDepth],
             \sampleRate, bitcrushParams[\sampleRate],
             \drive, bitcrushParams[\drive],
@@ -720,8 +793,8 @@ Chroma {
         ], synths[\blend], \addAfter);
 
         synths[\granular] = Synth(\chroma_granular, [
-            \inBus, buses[\granularAudio],
-            \outBus, buses[\granularAudio],
+            \inBus, buses[\bitcrushToGranular],
+            \outBus, buses[\granularToReverb],
             \grainBuf, grainBuffer,
             \freezeBuf, freezeBuffer,
             \ctrlBus, buses[\granularCtrl],
@@ -730,14 +803,14 @@ Chroma {
         ], synths[\blend], \addAfter);
 
         synths[\reverb] = Synth(\chroma_reverb, [
-            \inBus, buses[\reverbAudio],
-            \outBus, buses[\reverbAudio],
+            \inBus, buses[\granularToReverb],
+            \outBus, buses[\reverbToDelay],
             \decayTime, reverbParams[\decayTime],
             \mix, if(reverbParams[\enabled], { reverbParams[\mix] }, { 0.0 })
         ], synths[\blend], \addAfter);
 
-        synths[\modDelay] = Synth(\chroma_mod_delay, [
-            \inBus, buses[\delayAudio],
+        synths[\delay] = Synth(\chroma_mod_delay, [
+            \inBus, buses[\reverbToDelay],
             \outBus, buses[\delayAudio],
             \delayTime, delayParams[\delayTime],
             \decayTime, delayParams[\decayTime],
@@ -746,18 +819,23 @@ Chroma {
             \mix, if(delayParams[\enabled], { delayParams[\mix] }, { 0.0 })
         ], synths[\blend], \addAfter);
 
-        // Output mixer (at tail)
+        // Validate output bus before creating output synth
+        this.validateOutputBus(0);
+
+        // Output mixer (at tail) - reads from last effect's final bus
         synths[\output] = Synth(\chroma_output, [
-            \inBus, buses[\overdriveAudio],
-            \granularBus, buses[\granularAudio],
-            \reverbBus, buses[\reverbAudio],
-            \delayBus, buses[\delayAudio],
+            \dryBus, buses[\frozenAudio],
+            \wetBus, if(effectsOrder.last == \delay, {
+                buses[\delayAudio]
+            }, {
+                this.getEffectOutputBus(effectsOrder.last)
+            }),
             \dryWet, dryWet
         ], nil, \addToTail);
 
         // Map control buses
         synths[\granular].map(\ctrlBus, buses[\granularCtrl]);
-        
+
         // Apply current effects order
         this.reconnectEffects();
     }
@@ -765,48 +843,59 @@ Chroma {
     reconnectEffects {
         var prevEffect = \blend;
         var lastEffect, lastBus;
-        
+
+        this.log(1, "Reconnecting effects chain: %".format(effectsOrder));
+
         // Connect effects in order
         effectsOrder.do { |effectName, i|
             var synth = synths[effectName];
             if (synth.notNil) {
                 // Move synth to follow previous effect
                 synth.moveAfter(synths[prevEffect]);
-                
+
                 // Update synth input/output buses based on position
                 if (i == 0) {
-                    // First effect reads from filtered audio bus
-                    synth.set(\inBus, buses[\filteredAudio]);
+                    // First effect reads from frozen audio (input signal)
+                    synth.set(\inBus, buses[\frozenAudio]);
+                    synth.set(\outBus, this.getEffectOutputBus(effectName));
+                    this.log(1, "  % inBus <- frozenAudio (bus %), outBus -> % (bus %)".format(
+                        effectName, buses[\frozenAudio].index,
+                        this.getEffectOutputBus(effectName).index, this.getEffectOutputBus(effectName).index));
                 } {
-                    // Subsequent effects read from previous effect
+                    // Subsequent effects read from previous effect's intermediate bus
                     var prevBus = this.getEffectOutputBus(effectsOrder[i-1]);
                     synth.set(\inBus, prevBus);
+                    synth.set(\outBus, this.getEffectOutputBus(effectName));
+                    this.log(1, "  % inBus <- % outBus (bus %), outBus -> % (bus %)".format(
+                        effectName, effectsOrder[i-1], prevBus.index,
+                        this.getEffectOutputBus(effectName).index, this.getEffectOutputBus(effectName).index));
                 };
-                
+
                 prevEffect = effectName;
             }
         };
-        
+
         // Ensure output synth reads from last effect correctly
         lastEffect = effectsOrder.last;
         lastBus = this.getEffectOutputBus(lastEffect);
-        synths[\output].set(\inBus, lastBus);
+        synths[\output].set(\wetBus, lastBus);
+        this.log(1, "  output wetBus <- % outBus (bus %)".format(lastEffect, lastBus.index));
     }
 
     getEffectOutputBus { |effectName|
-        // Return the output bus for each effect type
-        switch (effectName,
-            \filter, { buses[\filteredAudio] },
-            \overdrive, { buses[\overdriveAudio] },
-            \bitcrush, { buses[\bitcrushAudio] },
-            \granular, { buses[\granularAudio] },
-            \reverb, { buses[\reverbAudio] },
+        ^switch (effectName,
+            \filter, { buses[\filterToOverdrive] },
+            \overdrive, { buses[\overdriveToBitcrush] },
+            \bitcrush, { buses[\bitcrushToGranular] },
+            \granular, { buses[\granularToReverb] },
+            \reverb, { buses[\reverbToDelay] },
             \delay, { buses[\delayAudio] },
-            { buses[\filteredAudio] } // fallback
+            { buses[\filterToOverdrive] } // fallback
         );
     }
 
     cleanup {
+        this.log(1, "Cleaning up Chroma resources...");
 
         this.cleanupOSC;
         synths.do(_.free);
@@ -822,56 +911,62 @@ Chroma {
     setupOSC { |replyPort=9000|
         var replyAddr = NetAddr("127.0.0.1", replyPort);
 
+        // Debug control
+        OSCdef(\chromaDebug, { |msg|
+            this.setDebugLevel(msg[1].asInteger);
+        }, '/chroma/debug');
+
         // Input controls
         OSCdef(\chromaGain, { |msg|
+            this.log(2, "OSC /chroma/gain %".format(msg[1]));
             this.setInputGain(msg[1]);
-
         }, '/chroma/gain');
         OSCdef(\chromaInputFreeze, { |msg|
+            this.log(2, "OSC /chroma/inputFreeze %".format(msg[1]));
             if(msg[1].asBoolean != inputFrozen) { this.toggleInputFreeze };
-
         }, '/chroma/inputFreeze');
         OSCdef(\chromaInputFreezeLength, { |msg|
+            this.log(2, "OSC /chroma/inputFreezeLength %".format(msg[1]));
             this.setInputFreezeLength(msg[1]);
-
         }, '/chroma/inputFreezeLength');
 
         // Filter controls
         OSCdef(\chromaFilterEnabled, { |msg|
+            this.log(2, "OSC /chroma/filterEnabled %".format(msg[1]));
             this.setFilterEnabled(msg[1].asBoolean);
-
         }, '/chroma/filterEnabled');
         OSCdef(\chromaFilterAmount, { |msg|
+            this.log(2, "OSC /chroma/filterAmount %".format(msg[1]));
             this.setFilterAmount(msg[1]);
-
         }, '/chroma/filterAmount');
         OSCdef(\chromaFilterCutoff, { |msg|
+            this.log(2, "OSC /chroma/filterCutoff %".format(msg[1]));
             this.setFilterCutoff(msg[1]);
-
         }, '/chroma/filterCutoff');
         OSCdef(\chromaFilterResonance, { |msg|
+            this.log(2, "OSC /chroma/filterResonance %".format(msg[1]));
             this.setFilterResonance(msg[1]);
-
         }, '/chroma/filterResonance');
 
         // Overdrive controls
         OSCdef(\chromaOverdriveEnabled, { |msg|
+            this.log(2, "OSC /chroma/overdriveEnabled %".format(msg[1]));
             this.setOverdriveEnabled(msg[1].asBoolean);
-
         }, '/chroma/overdriveEnabled');
         OSCdef(\chromaOverdriveDrive, { |msg|
+            this.log(2, "OSC /chroma/overdriveDrive %".format(msg[1]));
             this.setOverdriveDrive(msg[1]);
-
         }, '/chroma/overdriveDrive');
         OSCdef(\chromaOverdriveTone, { |msg|
+            this.log(2, "OSC /chroma/overdriveTone %".format(msg[1]));
             this.setOverdriveTone(msg[1]);
-
         }, '/chroma/overdriveTone');
         OSCdef(\chromaOverdriveMix, { |msg|
+            this.log(2, "OSC /chroma/overdriveMix %".format(msg[1]));
             this.setOverdriveMix(msg[1]);
-
         }, '/chroma/overdriveMix');
         OSCdef(\chromaOverdriveBias, { |msg|
+            this.log(2, "OSC /chroma/overdriveBias %".format(msg[1]));
             if(msg.size >= 2 && msg[1].isNumber) {
                 this.setOverdriveBias(msg[1]);
             } {
@@ -881,130 +976,121 @@ Chroma {
 
         // Granular controls
         OSCdef(\chromaGranularEnabled, { |msg|
+            this.log(2, "OSC /chroma/granularEnabled %".format(msg[1]));
             this.setGranularEnabled(msg[1].asBoolean);
-
         }, '/chroma/granularEnabled');
         OSCdef(\chromaGranularDensity, { |msg|
+            this.log(2, "OSC /chroma/granularDensity %".format(msg[1]));
             this.setGrainDensity(msg[1]);
-
         }, '/chroma/granularDensity');
         OSCdef(\chromaGranularSize, { |msg|
+            this.log(2, "OSC /chroma/granularSize %".format(msg[1]));
             this.setGrainSize(msg[1]);
-
         }, '/chroma/granularSize');
         OSCdef(\chromaGranularPitchScatter, { |msg|
+            this.log(2, "OSC /chroma/granularPitchScatter %".format(msg[1]));
             this.setGrainPitchScatter(msg[1]);
-
         }, '/chroma/granularPitchScatter');
         OSCdef(\chromaGranularPosScatter, { |msg|
+            this.log(2, "OSC /chroma/granularPosScatter %".format(msg[1]));
             this.setGrainPosScatter(msg[1]);
-
         }, '/chroma/granularPosScatter');
         OSCdef(\chromaGranularMix, { |msg|
+            this.log(2, "OSC /chroma/granularMix %".format(msg[1]));
             this.setGranularMix(msg[1]);
-
         }, '/chroma/granularMix');
         OSCdef(\chromaGranularFreeze, { |msg|
+            this.log(2, "OSC /chroma/granularFreeze %".format(msg[1]));
             if(msg[1].asBoolean != frozen) { this.toggleGranularFreeze };
-
         }, '/chroma/granularFreeze');
         OSCdef(\chromaGrainIntensity, { |msg|
+            this.log(2, "OSC /chroma/grainIntensity %".format(msg[1]));
             this.setGrainIntensity(msg[1].asSymbol);
-
         }, '/chroma/grainIntensity');
 
         // Bitcrushing controls
         OSCdef(\chromaBitcrushEnabled, { |msg|
+            this.log(2, "OSC /chroma/bitcrushEnabled %".format(msg[1]));
             this.setBitcrushEnabled(msg[1].asBoolean);
-
         }, '/chroma/bitcrushEnabled');
         OSCdef(\chromaBitDepth, { |msg|
+            this.log(2, "OSC /chroma/bitDepth %".format(msg[1]));
             this.setBitDepth(msg[1]);
-
         }, '/chroma/bitDepth');
         OSCdef(\chromaBitcrushSampleRate, { |msg|
+            this.log(2, "OSC /chroma/bitcrushSampleRate %".format(msg[1]));
             this.setBitcrushSampleRate(msg[1]);
-
         }, '/chroma/bitcrushSampleRate');
         OSCdef(\chromaBitcrushDrive, { |msg|
+            this.log(2, "OSC /chroma/bitcrushDrive %".format(msg[1]));
             this.setBitcrushDrive(msg[1]);
-
         }, '/chroma/bitcrushDrive');
         OSCdef(\chromaBitcrushMix, { |msg|
+            this.log(2, "OSC /chroma/bitcrushMix %".format(msg[1]));
             this.setBitcrushMix(msg[1]);
-
         }, '/chroma/bitcrushMix');
 
         // Reverb controls
         OSCdef(\chromaReverbEnabled, { |msg|
+            this.log(2, "OSC /chroma/reverbEnabled %".format(msg[1]));
             this.setReverbEnabled(msg[1].asBoolean);
-
         }, '/chroma/reverbEnabled');
         OSCdef(\chromaReverbDecayTime, { |msg|
+            this.log(2, "OSC /chroma/reverbDecayTime %".format(msg[1]));
             this.setReverbDecayTime(msg[1]);
-
         }, '/chroma/reverbDecayTime');
         OSCdef(\chromaReverbMix, { |msg|
+            this.log(2, "OSC /chroma/reverbMix %".format(msg[1]));
             this.setReverbMix(msg[1]);
-
         }, '/chroma/reverbMix');
 
         // Delay controls
         OSCdef(\chromaDelayEnabled, { |msg|
+            this.log(2, "OSC /chroma/delayEnabled %".format(msg[1]));
             this.setDelayEnabled(msg[1].asBoolean);
-
         }, '/chroma/delayEnabled');
         OSCdef(\chromaDelayTime, { |msg|
+            this.log(2, "OSC /chroma/delayTime %".format(msg[1]));
             this.setDelayTime(msg[1]);
-
         }, '/chroma/delayTime');
         OSCdef(\chromaDelayDecayTime, { |msg|
+            this.log(2, "OSC /chroma/delayDecayTime %".format(msg[1]));
             this.setDelayDecayTime(msg[1]);
-
         }, '/chroma/delayDecayTime');
         OSCdef(\chromaModRate, { |msg|
+            this.log(2, "OSC /chroma/modRate %".format(msg[1]));
             this.setModRate(msg[1]);
-
         }, '/chroma/modRate');
         OSCdef(\chromaModDepth, { |msg|
+            this.log(2, "OSC /chroma/modDepth %".format(msg[1]));
             this.setModDepth(msg[1]);
-
         }, '/chroma/modDepth');
         OSCdef(\chromaDelayMix, { |msg|
+            this.log(2, "OSC /chroma/delayMix %".format(msg[1]));
             this.setDelayMix(msg[1]);
-
         }, '/chroma/delayMix');
 
         // Global controls
         OSCdef(\chromaBlendMode, { |msg|
             var modes = [\mirror, \complement, \transform];
+            this.log(2, "OSC /chroma/blendMode %".format(msg[1]));
             this.setBlendMode(modes[msg[1].asInteger.clip(0, 2)]);
-
         }, '/chroma/blendMode');
         OSCdef(\chromaDryWet, { |msg|
+            this.log(2, "OSC /chroma/dryWet %".format(msg[1]));
             this.setDryWet(msg[1]);
-
         }, '/chroma/dryWet');
 
         // Effects order controls
         OSCdef(\chromaEffectsOrder, { |msg|
             var newOrder = msg[1..];
+            this.log(2, "OSC /chroma/effectsOrder %".format(newOrder));
             this.setEffectsOrder(newOrder);
-
         }, '/chroma/effectsOrder');
-
-
-
-
-
-
-
-        "Chroma OSC responders ready".postln;
     }
 
-
-
     cleanupOSC {
+        OSCdef(\chromaDebug).free;
         OSCdef(\chromaGain).free;
         OSCdef(\chromaInputFreeze).free;
         OSCdef(\chromaInputFreezeLength).free;
@@ -1040,10 +1126,8 @@ Chroma {
         OSCdef(\chromaModDepth).free;
         OSCdef(\chromaDelayMix).free;
         OSCdef(\chromaEffectsOrder).free;
-        OSCdef(\chromaGetEffectsOrder).free;
         OSCdef(\chromaBlendMode).free;
         OSCdef(\chromaDryWet).free;
-        OSCdef(\chromaSync).free;
     }
 
     blendModeIndex {
@@ -1073,6 +1157,7 @@ Chroma {
 
     toggleInputFreeze {
         inputFrozen = inputFrozen.not;
+        this.log(1, "Input freeze: %".format(inputFrozen));
         if(synths[\inputFreeze].notNil) {
             synths[\inputFreeze].set(\freeze, inputFrozen.asInteger);
         };
@@ -1087,6 +1172,7 @@ Chroma {
 
     toggleGranularFreeze {
         frozen = frozen.not;
+        this.log(1, "Granular freeze: %".format(frozen));
         if(frozen) {
             // Copy current grain buffer to freeze buffer
             grainBuffer.copyData(freezeBuffer);
@@ -1098,6 +1184,7 @@ Chroma {
 
     setFilterEnabled { |enabled|
         filterParams[\enabled] = enabled;
+        this.log(1, "Filter enabled: %".format(enabled));
         if(synths[\filter].notNil) {
             synths[\filter].set(\amount, if(enabled, { filterParams[\amount] }, { 0.0 }));
         };
@@ -1123,6 +1210,7 @@ Chroma {
 
     setOverdriveEnabled { |enabled|
         overdriveParams[\enabled] = enabled;
+        this.log(1, "Overdrive enabled: %".format(enabled));
         if(synths[\overdrive].notNil) {
             synths[\overdrive].set(\mix, if(enabled, { overdriveParams[\mix] }, { 0.0 }));
         };
@@ -1156,6 +1244,7 @@ Chroma {
 
     setGranularEnabled { |enabled|
         granularParams[\enabled] = enabled;
+        this.log(1, "Granular enabled: %".format(enabled));
         if(synths[\granular].notNil) {
             synths[\granular].set(\mix, if(enabled, { granularParams[\mix] }, { 0.0 }));
         };
@@ -1207,7 +1296,8 @@ Chroma {
     // Bitcrushing controls
     setBitcrushEnabled { |enabled|
         bitcrushParams[\enabled] = enabled;
-        if(synths[\bitcrush].notNil) { 
+        this.log(1, "Bitcrush enabled: %".format(enabled));
+        if(synths[\bitcrush].notNil) {
             synths[\bitcrush].set(\mix, if(enabled, { bitcrushParams[\mix] }, { 0.0 }));
         };
     }
@@ -1237,7 +1327,8 @@ Chroma {
     // Reverb controls
     setReverbEnabled { |enabled|
         reverbParams[\enabled] = enabled;
-        if(synths[\reverb].notNil) { 
+        this.log(1, "Reverb enabled: %".format(enabled));
+        if(synths[\reverb].notNil) {
             synths[\reverb].set(\mix, if(enabled, { reverbParams[\mix] }, { 0.0 }));
         };
     }
@@ -1257,37 +1348,36 @@ Chroma {
     // Delay controls
     setDelayEnabled { |enabled|
         delayParams[\enabled] = enabled;
-        if(synths[\modDelay].notNil) { 
-            synths[\modDelay].set(\mix, if(enabled, { delayParams[\mix] }, { 0.0 }));
+        this.log(1, "Delay enabled: %".format(enabled));
+        if(synths[\delay].notNil) {
+            synths[\delay].set(\mix, if(enabled, { delayParams[\mix] }, { 0.0 }));
         };
     }
 
     setDelayTime { |val|
         delayParams[\delayTime] = val.clip(0.1, 1);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\delayTime, val) };
+        if(synths[\delay].notNil) { synths[\delay].set(\delayTime, val) };
     }
 
     setDelayDecayTime { |val|
         delayParams[\decayTime] = val.clip(0.5, 10);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\decayTime, val) };
+        if(synths[\delay].notNil) { synths[\delay].set(\decayTime, val) };
     }
 
     setModRate { |val|
         delayParams[\modRate] = val.clip(0.1, 5);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modRate, val) };
+        if(synths[\delay].notNil) { synths[\delay].set(\modRate, val) };
     }
 
     setModDepth { |val|
         delayParams[\modDepth] = val.clip(0, 1);
-        if(synths[\modDelay].notNil) { synths[\modDelay].set(\modDepth, val) };
+        if(synths[\delay].notNil) { synths[\delay].set(\modDepth, val) };
     }
 
     setDelayMix { |val|
         delayParams[\mix] = val.clip(0, 1);
-        if(synths[\modDelay].notNil && { delayParams[\enabled] }) { 
-            synths[\modDelay].set(\mix, val);
+        if(synths[\delay].notNil && { delayParams[\enabled] }) {
+            synths[\delay].set(\mix, val);
         };
     }
-
-
 }

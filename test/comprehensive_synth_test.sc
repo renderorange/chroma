@@ -95,27 +95,66 @@ Server.default.waitForBoot({
         instance.toggleGranularFreeze;
         ("  - frozen reset: " ++ instance.frozen).postln;
 
-        "Testing reverb/delay controls...".postln;
-        instance.setReverbDelayBlend(0.3);
-        ("  - reverbDelayBlend: " ++ instance.reverbDelayParams[\blend]).postln;
+        "Testing reverb controls...".postln;
+        instance.setReverbEnabled(true);
+        ("  - reverbEnabled: " ++ instance.reverbParams[\enabled]).postln;
 
-        instance.setDecayTime(5);
-        ("  - decayTime: " ++ instance.reverbDelayParams[\decayTime]).postln;
+        instance.setReverbDecayTime(5);
+        ("  - reverbDecayTime: " ++ instance.reverbParams[\decayTime]).postln;
 
-        instance.setShimmerPitch(7);
-        ("  - shimmerPitch: " ++ instance.reverbDelayParams[\shimmerPitch]).postln;
+        instance.setReverbMix(0.4);
+        ("  - reverbMix: " ++ instance.reverbParams[\mix]).postln;
+
+        "Testing delay controls...".postln;
+        instance.setDelayEnabled(true);
+        ("  - delayEnabled: " ++ instance.delayParams[\enabled]).postln;
 
         instance.setDelayTime(0.5);
-        ("  - delayTime: " ++ instance.reverbDelayParams[\delayTime]).postln;
+        ("  - delayTime: " ++ instance.delayParams[\delayTime]).postln;
+
+        instance.setDelayDecayTime(3);
+        ("  - delayDecayTime: " ++ instance.delayParams[\decayTime]).postln;
 
         instance.setModRate(1.0);
-        ("  - modRate: " ++ instance.reverbDelayParams[\modRate]).postln;
+        ("  - modRate: " ++ instance.delayParams[\modRate]).postln;
 
         instance.setModDepth(0.5);
-        ("  - modDepth: " ++ instance.reverbDelayParams[\modDepth]).postln;
+        ("  - modDepth: " ++ instance.delayParams[\modDepth]).postln;
 
-        instance.setReverbDelayMix(0.4);
-        ("  - reverbDelayMix: " ++ instance.reverbDelayParams[\mix]).postln;
+        instance.setDelayMix(0.4);
+        ("  - delayMix: " ++ instance.delayParams[\mix]).postln;
+
+        "Testing overdrive controls...".postln;
+        instance.setOverdriveEnabled(true);
+        ("  - overdriveEnabled: " ++ instance.overdriveParams[\enabled]).postln;
+
+        instance.setOverdriveDrive(0.6);
+        ("  - overdriveDrive: " ++ instance.overdriveParams[\drive]).postln;
+
+        instance.setOverdriveTone(0.8);
+        ("  - overdriveTone: " ++ instance.overdriveParams[\tone]).postln;
+
+        instance.setOverdriveBias(0.3);
+        ("  - overdriveBias: " ++ instance.overdriveParams[\bias]).postln;
+
+        instance.setOverdriveMix(0.5);
+        ("  - overdriveMix: " ++ instance.overdriveParams[\mix]).postln;
+
+        "Testing bitcrush controls...".postln;
+        instance.setBitcrushEnabled(true);
+        ("  - bitcrushEnabled: " ++ instance.bitcrushParams[\enabled]).postln;
+
+        instance.setBitDepth(12);
+        ("  - bitDepth: " ++ instance.bitcrushParams[\bitDepth]).postln;
+
+        instance.setBitcrushSampleRate(8000);
+        ("  - bitcrushSampleRate: " ++ instance.bitcrushParams[\sampleRate]).postln;
+
+        instance.setBitcrushDrive(0.6);
+        ("  - bitcrushDrive: " ++ instance.bitcrushParams[\drive]).postln;
+
+        instance.setBitcrushMix(0.4);
+        ("  - bitcrushMix: " ++ instance.bitcrushParams[\mix]).postln;
 
         "Testing output controls...".postln;
         instance.setDryWet(0.6);
