@@ -2,7 +2,7 @@
 
 A SuperCollider-based audio effects engine providing real-time audio processing with multiple configurable effects, spectral analysis, and flexible parameter control via Open Sound Control (OSC).
 
-**Note**: This repository contains the SuperCollider audio engine only. For a terminal user interface, see [chroma-tui](https://github.com/renderorange/chroma-tui).
+**Note**: This repository contains the SuperCollider audio engine only. For a terminal user interface, see [chroma-control](https://github.com/renderorange/chroma-control).
 
 ## Features
 
@@ -33,7 +33,7 @@ A SuperCollider-based audio effects engine providing real-time audio processing 
 ### Prerequisites
 - SuperCollider 3.11+ with sc3-plugins
 - JACK Audio Connection Kit (Linux) or CoreAudio (macOS)
-- OSC client for control (see [chroma-tui](https://github.com/renderorange/chroma-tui))
+- OSC client for control (see [chroma-control](https://github.com/renderorange/chroma-control))
 
 ### Install SuperCollider
 
@@ -231,7 +231,7 @@ jack_connect Chroma:out system:playback_2
 
 ## TUI Control
 
-For a complete terminal interface see [chroma-tui](https://github.com/renderorange/chroma-tui).
+For a complete terminal interface see [chroma-control](https://github.com/renderorange/chroma-control).
 
 ## Architecture
 
@@ -326,7 +326,7 @@ chroma/
 ### Getting Help
 
 - **Issues**: [GitHub Issues](https://github.com/renderorange/chroma/issues)
-- **TUI Project**: [chroma-tui](https://github.com/renderorange/chroma-tui)
+- **Chroma interface**: [chroma-control](https://github.com/renderorange/chroma-control)
 - **SuperCollider**: [SuperCollider Documentation](https://doc.sccode.org/)
 
 ## License
